@@ -1,0 +1,19 @@
+# Python environment
+.venv/
+__pycache__/
+*.pyc
+
+# Large data files (regenerate with src/data.py and src/features.py; see data/README.md)
+data/*.npy
+data/*.pkl
+
+# Large derived artefacts (regenerate by rerunning the pipeline)
+results/*.pkl
+results/*.npz
+models/
+logs/
+
+# Papers are redistributed by their publishers, not here (see papers/README.md for links)
+papers/*.pdf
+
+.DS_Store

@@ -1,0 +1,572 @@
+{
+  "sample": {
+    "rows": 38183,
+    "stocks_per_day": 40,
+    "focus_tickers": [
+      "AAPL",
+      "MSFT",
+      "JPM",
+      "XOM",
+      "PFE"
+    ]
+  },
+  "X1_explainer_agreement": {
+    "SHAP vs permutation": {
+      "kendall_tau": 0.03225806451612904,
+      "top5_overlap": 0.6
+    },
+    "SHAP vs MDI": {
+      "kendall_tau": 0.6935483870967744,
+      "top5_overlap": 0.8
+    },
+    "permutation vs MDI": {
+      "kendall_tau": 0.1532258064516129,
+      "top5_overlap": 0.8
+    },
+    "permutation_importance_positive_share": 0.125
+  },
+  "X2_family_shares_overall": {
+    "Past returns": 0.0698,
+    "Trend": 0.038,
+    "Oscillators": 0.0202,
+    "Volatility": 0.0756,
+    "Volume": 0.015,
+    "Candle": 0.0592,
+    "Market & sector": 0.7222
+  },
+  "X2_family_shares_by_year": {
+    "2019": {
+      "Past returns": 0.0861,
+      "Trend": 0.0447,
+      "Oscillators": 0.0233,
+      "Volatility": 0.0498,
+      "Volume": 0.0161,
+      "Candle": 0.0602,
+      "Market & sector": 0.7198
+    },
+    "2020": {
+      "Past returns": 0.057,
+      "Trend": 0.0388,
+      "Oscillators": 0.0172,
+      "Volatility": 0.0621,
+      "Volume": 0.0116,
+      "Candle": 0.0429,
+      "Market & sector": 0.7704
+    },
+    "2021": {
+      "Past returns": 0.08,
+      "Trend": 0.0408,
+      "Oscillators": 0.0272,
+      "Volatility": 0.1044,
+      "Volume": 0.0174,
+      "Candle": 0.0869,
+      "Market & sector": 0.6432
+    },
+    "2022": {
+      "Past returns": 0.0597,
+      "Trend": 0.0233,
+      "Oscillators": 0.0116,
+      "Volatility": 0.092,
+      "Volume": 0.0172,
+      "Candle": 0.0489,
+      "Market & sector": 0.7472
+    }
+  },
+  "X3_local": {
+    "AAPL 2020-03-16": {
+      "close": 59.6440849,
+      "predicted_close": 59.82104299510512,
+      "actual_next_close": 62.26663970000001,
+      "base_value_ret": 0.0005473829652511791,
+      "pred_ret": 0.0029625084348054364,
+      "top_contributions_$": {
+        "mkt_vol_20d": {
+          "value": 0.05239233374595642,
+          "dollars": 0.07672236870314468
+        },
+        "mkt_ret_5d": {
+          "value": -0.17806966602802277,
+          "dollars": 0.04394396560360544
+        },
+        "mkt_ret_1d": {
+          "value": -0.13695360720157623,
+          "dollars": -0.013086788120308895
+        },
+        "ret_20d": {
+          "value": -0.2938661277294159,
+          "dollars": 0.011344138322781062
+        },
+        "gap_open": {
+          "value": -0.13878214359283447,
+          "dollars": -0.010352020521695239
+        },
+        "sector_ret_5d": {
+          "value": -0.15011097490787506,
+          "dollars": 0.008337886461624483
+        },
+        "dist_sma50": {
+          "value": -0.20400990545749664,
+          "dollars": 0.007311886607941343
+        },
+        "atr_14": {
+          "value": 0.08651294559240341,
+          "dollars": 0.007279970205053501
+        }
+      }
+    },
+    "AAPL 2019-06-03": {
+      "close": 42.2858963,
+      "predicted_close": 42.36189116956775,
+      "actual_next_close": 43.832878099999995,
+      "base_value_ret": 0.00045764030618757073,
+      "pred_ret": 0.0017955552591962835,
+      "top_contributions_$": {
+        "mkt_ret_5d": {
+          "value": -0.02130863070487976,
+          "dollars": 0.03056857263013411
+        },
+        "sector_ret_5d": {
+          "value": -0.03419405594468117,
+          "dollars": 0.008401973201118643
+        },
+        "dist_sma20": {
+          "value": -0.07493741065263748,
+          "dollars": 0.00447758407103483
+        },
+        "ret_1d": {
+          "value": -0.010161732323467731,
+          "dollars": 0.0034580419756411176
+        },
+        "range_1d": {
+          "value": 0.04394856095314026,
+          "dollars": -0.0028156417421523667
+        },
+        "ret_10d": {
+          "value": -0.08672283589839935,
+          "dollars": 0.002486978025624318
+        },
+        "macd_hist": {
+          "value": -0.008672619238495827,
+          "dollars": 0.002098110724433939
+        },
+        "dist_sma50": {
+          "value": -0.10668519139289856,
+          "dollars": 0.0020709202092064525
+        }
+      }
+    },
+    "XOM 2020-03-09": {
+      "close": 36.2652664,
+      "predicted_close": 36.37242336729807,
+      "actual_next_close": 37.6081047,
+      "base_value_ret": 0.0005473829652511791,
+      "pred_ret": 0.002950453005219239,
+      "top_contributions_$": {
+        "mkt_vol_20d": {
+          "value": 0.02916008047759533,
+          "dollars": 0.04699945568031485
+        },
+        "mkt_ret_5d": {
+          "value": -0.13922473788261414,
+          "dollars": 0.026375649472408717
+        },
+        "mkt_ret_1d": {
+          "value": -0.0943710133433342,
+          "dollars": -0.007907317750228685
+        },
+        "ret_20d": {
+          "value": -0.3699641525745392,
+          "dollars": 0.006891162519819242
+        },
+        "gap_open": {
+          "value": -0.133980855345726,
+          "dollars": -0.006338356417072916
+        },
+        "sector_ret_5d": {
+          "value": -0.47037118673324585,
+          "dollars": 0.005120915563124611
+        },
+        "atr_14": {
+          "value": 0.06352806836366653,
+          "dollars": 0.004393378143529754
+        },
+        "dist_sma50": {
+          "value": -0.3218872547149658,
+          "dollars": 0.004309836132629266
+        }
+      }
+    },
+    "JPM 2022-05-18": {
+      "close": 120.0899963,
+      "predicted_close": 120.04891186767362,
+      "actual_next_close": 118.30999760000002,
+      "base_value_ret": 0.0005773170067305653,
+      "pred_ret": -0.00034217222890458796,
+      "top_contributions_$": {
+        "mkt_vol_20d": {
+          "value": 0.020183321088552475,
+          "dollars": -0.056258884208642765
+        },
+        "mkt_ret_5d": {
+          "value": 0.0047808680683374405,
+          "dollars": -0.0539209174537241
+        },
+        "mkt_ret_1d": {
+          "value": -0.039620764553546906,
+          "dollars": -0.01892812550928155
+        },
+        "ret_60d": {
+          "value": -0.22739841043949127,
+          "dollars": 0.005222005431697089
+        },
+        "sector_ret_5d": {
+          "value": 0.002466353354975581,
+          "dollars": -0.004691781658177181
+        },
+        "ret_5d": {
+          "value": 0.016371073201298714,
+          "dollars": -0.003941461694343866
+        },
+        "dist_sma200": {
+          "value": -0.1992933452129364,
+          "dollars": 0.003625672822334154
+        },
+        "atr_14": {
+          "value": 0.03143475204706192,
+          "dollars": 0.0033599700794768664
+        }
+      }
+    }
+  },
+  "X4_regimes": {
+    "groups": [
+      "2022 bear",
+      "COVID crash",
+      "Pre-COVID bull",
+      "Recovery"
+    ],
+    "family_shares": {
+      "2022 bear": {
+        "Past returns": 0.0597,
+        "Trend": 0.0233,
+        "Oscillators": 0.0116,
+        "Volatility": 0.092,
+        "Volume": 0.0172,
+        "Candle": 0.0489,
+        "Market & sector": 0.7472
+      },
+      "COVID crash": {
+        "Past returns": 0.0718,
+        "Trend": 0.0592,
+        "Oscillators": 0.0152,
+        "Volatility": 0.0586,
+        "Volume": 0.0066,
+        "Candle": 0.0412,
+        "Market & sector": 0.7474
+      },
+      "Pre-COVID bull": {
+        "Past returns": 0.0866,
+        "Trend": 0.0458,
+        "Oscillators": 0.0245,
+        "Volatility": 0.0507,
+        "Volume": 0.0168,
+        "Candle": 0.0633,
+        "Market & sector": 0.7123
+      },
+      "Recovery": {
+        "Past returns": 0.0654,
+        "Trend": 0.0372,
+        "Oscillators": 0.0214,
+        "Volatility": 0.0829,
+        "Volume": 0.0143,
+        "Candle": 0.0622,
+        "Market & sector": 0.7166
+      }
+    },
+    "mean_pairwise_TVD": 0.05386318439871815,
+    "null_mean_TVD": 0.01736549254211695,
+    "p_value": 0.002997002997002997,
+    "feature_rank_corr": {
+      "Pre-COVID bull vs COVID crash": 0.8394428152492668,
+      "Pre-COVID bull vs Recovery": 0.7818914956011729,
+      "Pre-COVID bull vs 2022 bear": 0.5267595307917888,
+      "COVID crash vs Recovery": 0.752199413489736,
+      "COVID crash vs 2022 bear": 0.4604105571847507,
+      "Recovery vs 2022 bear": 0.7078445747800586
+    },
+    "top5": {
+      "Pre-COVID bull": [
+        "mkt_vol_20d",
+        "mkt_ret_5d",
+        "mkt_ret_1d",
+        "gap_open",
+        "sector_ret_5d"
+      ],
+      "COVID crash": [
+        "mkt_vol_20d",
+        "mkt_ret_5d",
+        "mkt_ret_1d",
+        "sector_ret_5d",
+        "ret_20d"
+      ],
+      "Recovery": [
+        "mkt_vol_20d",
+        "mkt_ret_1d",
+        "mkt_ret_5d",
+        "gap_open",
+        "ret_1d"
+      ],
+      "2022 bear": [
+        "mkt_vol_20d",
+        "mkt_ret_5d",
+        "mkt_ret_1d",
+        "gap_open",
+        "atr_14"
+      ]
+    }
+  },
+  "X4_sectors": {
+    "groups": [
+      "Communication Services",
+      "Consumer Discretionary",
+      "Consumer Staples",
+      "Energy",
+      "Financials",
+      "Health Care",
+      "Industrials",
+      "Information Technology",
+      "Materials",
+      "Real Estate",
+      "Utilities"
+    ],
+    "family_shares": {
+      "Communication Services": {
+        "Past returns": 0.0728,
+        "Trend": 0.0407,
+        "Oscillators": 0.0197,
+        "Volatility": 0.0937,
+        "Volume": 0.0153,
+        "Candle": 0.0564,
+        "Market & sector": 0.7014
+      },
+      "Consumer Discretionary": {
+        "Past returns": 0.0751,
+        "Trend": 0.0413,
+        "Oscillators": 0.0197,
+        "Volatility": 0.0952,
+        "Volume": 0.0147,
+        "Candle": 0.0607,
+        "Market & sector": 0.6933
+      },
+      "Consumer Staples": {
+        "Past returns": 0.06,
+        "Trend": 0.0306,
+        "Oscillators": 0.0206,
+        "Volatility": 0.0582,
+        "Volume": 0.0152,
+        "Candle": 0.0511,
+        "Market & sector": 0.7642
+      },
+      "Energy": {
+        "Past returns": 0.0808,
+        "Trend": 0.0438,
+        "Oscillators": 0.0193,
+        "Volatility": 0.1036,
+        "Volume": 0.0139,
+        "Candle": 0.0702,
+        "Market & sector": 0.6683
+      },
+      "Financials": {
+        "Past returns": 0.0693,
+        "Trend": 0.0373,
+        "Oscillators": 0.0199,
+        "Volatility": 0.066,
+        "Volume": 0.015,
+        "Candle": 0.0613,
+        "Market & sector": 0.7313
+      },
+      "Health Care": {
+        "Past returns": 0.0674,
+        "Trend": 0.0374,
+        "Oscillators": 0.0208,
+        "Volatility": 0.0658,
+        "Volume": 0.0153,
+        "Candle": 0.0548,
+        "Market & sector": 0.7385
+      },
+      "Industrials": {
+        "Past returns": 0.0684,
+        "Trend": 0.038,
+        "Oscillators": 0.0206,
+        "Volatility": 0.0682,
+        "Volume": 0.0156,
+        "Candle": 0.0589,
+        "Market & sector": 0.7303
+      },
+      "Information Technology": {
+        "Past returns": 0.0711,
+        "Trend": 0.0385,
+        "Oscillators": 0.02,
+        "Volatility": 0.0788,
+        "Volume": 0.015,
+        "Candle": 0.0631,
+        "Market & sector": 0.7135
+      },
+      "Materials": {
+        "Past returns": 0.0721,
+        "Trend": 0.0385,
+        "Oscillators": 0.0199,
+        "Volatility": 0.0776,
+        "Volume": 0.0155,
+        "Candle": 0.0607,
+        "Market & sector": 0.7157
+      },
+      "Real Estate": {
+        "Past returns": 0.0644,
+        "Trend": 0.0345,
+        "Oscillators": 0.0205,
+        "Volatility": 0.0664,
+        "Volume": 0.0152,
+        "Candle": 0.0541,
+        "Market & sector": 0.7449
+      },
+      "Utilities": {
+        "Past returns": 0.061,
+        "Trend": 0.032,
+        "Oscillators": 0.0214,
+        "Volatility": 0.0607,
+        "Volume": 0.0144,
+        "Candle": 0.0496,
+        "Market & sector": 0.7608
+      }
+    },
+    "mean_pairwise_TVD": 0.035954217496471805,
+    "null_mean_TVD": 0.011428666644155152,
+    "p_value": 0.000999000999000999
+  },
+  "R1_faithfulness": {
+    "k": [
+      0,
+      1,
+      2,
+      4,
+      8,
+      16,
+      32
+    ],
+    "abs_change_bp": {
+      "top": [
+        0.0,
+        8.7037,
+        8.3877,
+        8.3627,
+        8.4701,
+        8.5564,
+        8.5938
+      ],
+      "random": [
+        0.0,
+        0.6529,
+        1.1902,
+        2.0386,
+        3.6498,
+        5.8753,
+        8.5938
+      ]
+    },
+    "AOPC_bp": {
+      "top": 8.512396375923252,
+      "random": 3.666758586988009
+    },
+    "fidelity_corr": {
+      "1": 0.9836281538295374,
+      "2": 0.9875844875341256,
+      "4": 0.9927673383931205,
+      "8": 0.9968795743128563,
+      "16": 0.9986707512051511,
+      "32": 0.9999999999999999
+    }
+  },
+  "R2_seed_stability": {
+    "global_kendall_tau": 0.8475806451612904,
+    "global_top5_overlap": 0.9199999999999999,
+    "row_spearman_median": 0.8580645161290322,
+    "prediction_corr": 0.9898815404344546
+  },
+  "R2_retrain_stability": {
+    "2019 vs 2020 model": {
+      "global_kendall_tau": 0.7459677419354841,
+      "global_top5_overlap": 0.8,
+      "row_spearman_median": 0.7296554252199412
+    },
+    "2020 vs 2021 model": {
+      "global_kendall_tau": 0.435483870967742,
+      "global_top5_overlap": 1.0,
+      "row_spearman_median": 0.5663489736070381
+    },
+    "2021 vs 2022 model": {
+      "global_kendall_tau": 0.7701612903225807,
+      "global_top5_overlap": 0.8,
+      "row_spearman_median": 0.7666788856304985
+    }
+  },
+  "R3_sanity_shuffled_labels": {
+    "real": {
+      "test": {
+        "IC": 0.018239329324272423,
+        "R2_vs_zero": -0.0001596455792252094,
+        "prediction_sd_bp": 9.650439476372398
+      },
+      "total_mean_abs_shap_bp": 20.849297493468182,
+      "family_shares": {
+        "Past returns": 0.0559,
+        "Trend": 0.0383,
+        "Oscillators": 0.0167,
+        "Volatility": 0.0626,
+        "Volume": 0.0115,
+        "Candle": 0.042,
+        "Market & sector": 0.773
+      }
+    },
+    "fully_shuffled": {
+      "global_kendall_tau_vs_real": 0.13306451612903228,
+      "global_top5_overlap_vs_real": 0.2,
+      "row_spearman_median_vs_real": 0.12756598240469205,
+      "total_mean_abs_shap_bp": 2.5855643776398707,
+      "family_shares": {
+        "Past returns": 0.1652,
+        "Trend": 0.178,
+        "Oscillators": 0.0537,
+        "Volatility": 0.1802,
+        "Volume": 0.1289,
+        "Candle": 0.0977,
+        "Market & sector": 0.1963
+      },
+      "test": {
+        "IC": -0.022775852794819015,
+        "R2_vs_zero": 0.00019299957869245432,
+        "prediction_sd_bp": 0.8812750904625031
+      }
+    },
+    "shuffled_within_day": {
+      "global_kendall_tau_vs_real": 0.5564516129032259,
+      "global_top5_overlap_vs_real": 0.8,
+      "row_spearman_median_vs_real": 0.6011730205278591,
+      "total_mean_abs_shap_bp": 19.53648078831417,
+      "family_shares": {
+        "Past returns": 0.029,
+        "Trend": 0.0356,
+        "Oscillators": 0.0086,
+        "Volatility": 0.041,
+        "Volume": 0.0092,
+        "Candle": 0.0313,
+        "Market & sector": 0.8454
+      },
+      "test": {
+        "IC": 0.011148456973020093,
+        "R2_vs_zero": -0.00014667530637413329,
+        "prediction_sd_bp": 9.622695902114412
+      }
+    }
+  }
+}
