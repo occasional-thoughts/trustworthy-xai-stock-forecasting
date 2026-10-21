@@ -27,6 +27,8 @@
 | **O5** | Audit the explanations for reliability | Faithfulness (deletion curves, AOPC, fidelity), stability (5 seeds, yearly retrains), explainer agreement (Kendall τ), sanity (two shuffled-label null models) | `results/xai.json`, `results/lime.json` |
 | **O6** | Test explanation drift formally | Permutation tests (1,000 permutations) on feature-family SHAP shares across 4 market regimes and 11 GICS sectors | `results/xai.json`, §7.4 |
 | **O7** | Produce a submittable write-up | Report, literature review of 5 recent papers with gaps, 15 figures, slide deck, public repository | `REPORT.docx`, `LIT_REVIEW_HANDOUT.docx`, `LIT_REVIEW_SLIDES.pptx` |
+| **O8** | Make the audit inspectable one forecast at a time | A local page that takes a stock and a day, runs the model, TreeSHAP and five LIME re-runs live, and reports agreement, stability and faithfulness for that single forecast | `src/app.py`, `src/static/index.html` |
+| **O9** | Forecast a session whose outcome does not exist yet | Download the universe from Yahoo Finance, rebuild the same features, retrain on everything up to the latest close, forecast the next session | `src/live.py`, `results/live_forecast.pkl` |
 
 ### 1.3 Why returns and not raw prices
 
@@ -97,8 +99,26 @@
                               │     within-day-shuffled label models             │
                               │  R5 Drift — 1,000-permutation tests across       │
                               │     4 regimes and 11 sectors                     │
-                              └──────────────────────────────────────────────────┘
+                              └──────────────────────────┬───────────────────────┘
+                                                         ▼
+       ┌─────────────────────────────────────────────────────────────────────────┐
+       │  STAGE 6 — USE                                                          │
+       │                                                                         │
+       │  src/app.py     one stock + one day  ──►  forecast, TreeSHAP, 5 LIME    │
+       │                 runs, agreement, stability, faithfulness   (~0.7 s)     │
+       │                 past day   → outcome known, forecast is scored          │
+       │                 next day   → outcome blank, nothing to score            │
+       │                                                                         │
+       │  src/live.py    Yahoo Finance ──► same 32 features ──► retrain on       │
+       │                 everything to the latest close ──► forecast the next    │
+       │                 session for the 431 tickers that still trade            │
+       └─────────────────────────────────────────────────────────────────────────┘
 ```
+
+**The two halves of Stage 6 answer different questions.** A forecast of a past day can be
+graded, which is how accuracy is measured at all; a forecast of the next session cannot be
+graded yet, which is what a deployed model actually does. The same model, features and
+explainers serve both.
 
 ### 2.2 Formal specification
 
@@ -181,12 +201,15 @@ it is what a low signal-to-noise problem looks like.
 | FR13 | The system shall test explanation **sanity** against two null models trained on shuffled labels (fully shuffled, and shuffled within each day). |
 | FR14 | The system shall test explanation **drift** across the four market regimes and the eleven GICS sectors with a 1,000-draw permutation test. |
 | FR15 | The system shall emit all results as machine-readable JSON, all figures as PNG, and the write-up as Markdown and Word. |
+| FR16 | The system shall provide an interactive page that accepts a stock and a trading day and returns, computed live from the saved model, the forecast, its TreeSHAP and LIME explanations, their agreement, LIME's run-to-run stability over 5 re-runs, and a faithfulness test for that single forecast. |
+| FR17 | The system shall additionally forecast the next trading session: retrieving current prices, rebuilding the same features, retraining with the same hyperparameters up to the latest close, and presenting the result with its outcome fields explicitly blank. |
+| FR18 | The system shall state, wherever a live forecast is shown, how many of the original 474 tickers still trade, which price vendor was used, and that the backtest found no return skill. |
 
 ### 3.2 Non-functional requirements
 
 | # | Requirement |
 |---|---|
-| NFR1 | **Reproducibility.** Every stochastic component is seeded (`SEED = 42`); a full re-run must reproduce every published number. |
+| NFR1 | **Reproducibility.** Every stochastic component is seeded (`SEED = 42`); a full re-run must reproduce every published number. *Defect found and fixed: `LimeTabularExplainer` binds its `RandomState` into the discretiser and the surrogate solver at construction, so reassigning `.random_state` on a reused explainer left the same seed returning a different explanation on every call (Spearman 0.46–0.53 between repeats that should have been identical). A fresh explainer is now constructed per seed, at a cost of 18 ms, and repeats are bit-identical.* |
 | NFR2 | **No look-ahead.** Feature construction, scaling and model selection must be verifiable as using only past information. |
 | NFR3 | **Runtime.** The complete pipeline must finish in under one hour on a laptop. *(Measured: ≈ 25 min on an Apple M3 Pro — tuning 5, training 10, explanations 7, figures 1.)* |
 | NFR4 | **Memory.** Must run within 16 GB RAM; the feature table is ~1.1 M stock-days × 32 float32 columns. |
@@ -207,6 +230,7 @@ it is what a low signal-to-noise problem looks like.
 | Matplotlib | 3.11.2 | figures |
 | joblib | 1.6.0 | model persistence, parallelism |
 | pandoc + python-docx | — | report → Word |
+| yfinance | 1.7.0 | current prices for the next-session forecast |
 | Node.js + pptxgenjs | — | slide deck |
 | git + GitHub | — | version control, public release |
 
@@ -242,4 +266,7 @@ it is what a low signal-to-noise problem looks like.
 | AC5 | Faithfulness: top-ranked deletion moves the forecast materially more than random deletion | ✅ 13.3× at *k* = 1 |
 | AC6 | Stability and sanity are both quantified | ✅ τ 0.85 across seeds; τ 0.13 vs a no-signal model |
 | AC7 | Drift is tested statistically, not asserted | ✅ regimes p = 0.003, sectors p = 0.001 |
-| AC8 | The pipeline reproduces from a clean checkout | ✅ 8 scripts, documented in `README.md` |
+| AC8 | The pipeline reproduces from a clean checkout | ✅ 12 steps, documented in `README.md` |
+| AC9 | Repeating a LIME explanation with the same seed returns identical weights | ✅ after the NFR1 fix; previously ρ 0.46–0.53 |
+| AC10 | A single forecast can be explained and audited interactively | ✅ ≈ 0.7 s per stock-day, nothing served from cache |
+| AC11 | A forecast exists for a session that has not traded | ✅ 431 stocks, retrained on 1,470,270 stock-days, outcome fields blank |
