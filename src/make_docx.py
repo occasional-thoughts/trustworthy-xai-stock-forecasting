@@ -1,4 +1,4 @@
-"""Convert REPORT.md to REPORT.docx with the figures embedded.
+"""Convert a project markdown file to .docx with the figures embedded.
 
 1. Copy the markdown, drop the hand-written contents list (Word gets a real table of
    contents) and turn each "Figures: `a.png`, `b.png`." line into embedded images.
@@ -6,9 +6,11 @@
 3. Tidy the Word file with python-docx: fonts, table borders and header shading, image
    widths and margins.
 
-    python src/make_docx.py
+    python src/make_docx.py                                  # REPORT.md -> REPORT.docx
+    python src/make_docx.py OBJECTIVE_MODEL_REQUIREMENTS.md   # -> the matching .docx
 """
 import re
+import sys
 import subprocess
 import tempfile
 from pathlib import Path
@@ -22,11 +24,14 @@ from docx.shared import Cm, Pt, RGBColor
 ROOT = Path(__file__).resolve().parents[1]
 FIG = ROOT / "results" / "figures"
 CAPTIONS = {
+    "return_skill.png": "Return-space skill: out-of-sample R\u00b2 on the next-day return and direction accuracy, by model",
+    "price_vs_return.png": "The same forecasts scored on the price level and on the return, and how narrowly the forecasts move",
+    "decile_portfolio.png": "Actual next-day return of each decile of predicted return, with the long-short spread gross and net of cost",
     "price_accuracy.png": "Next-day price error and share of forecasts within 2%, by model",
     "price_paths_AAPL.png": "AAPL one-day-ahead forecasts vs actual closing prices",
     "shap_global.png": "Top 15 features by mean |SHAP|",
     "shap_dependence.png": "How the top features move the forecast (SHAP dependence)",
-    "local_explanations.png": "Local SHAP explanations in dollars for individual stock-days",
+    "local_explanations.png": "Local SHAP explanations in basis points of forecast return for individual stock-days",
     "faithfulness.png": "Faithfulness: forecast change when top-SHAP vs random features are removed",
     "stability_sanity.png": "Stability across seeds and retraining, and comparison with no-signal models",
     "regime_family_shares.png": "Share of SHAP attribution by feature family across market regimes",
@@ -132,7 +137,11 @@ def polish(path):
         if name in styles:
             styles[name].font.name = "Calibri"
             styles[name].font.size = Pt(10.5)
-    for level, size in ((1, 20), (2, 15), (3, 12.5)):
+    for name in ("Source Code", "Verbatim Char", "Macro Text"):
+        if name in styles:
+            styles[name].font.name = "Menlo"
+            styles[name].font.size = Pt(6.5)
+    for level, size in ((1, 20), (2, 15), (3, 12.5), (4, 11)):
         name = f"Heading {level}"
         if name in styles:
             st = styles[name]
@@ -175,18 +184,21 @@ def polish(path):
 
 
 def main():
-    md = prepare_markdown((ROOT / "REPORT.md").read_text())
+    src = ROOT / (sys.argv[1] if len(sys.argv) > 1 else "REPORT.md")
+    md = prepare_markdown(src.read_text())
     # Title and subtitle become document metadata so they appear above the table of contents;
     # section headings then move up one level (## -> Heading 1).
     title = re.search(r"^# (.+)$", md, flags=re.M).group(1)
     subtitle = re.search(r"^\*([^*\n]+)\*$", md, flags=re.M).group(1)
     md = re.sub(r"^# .+\n+\*[^*\n]+\*\n+---\n", "", md, count=1, flags=re.M)
-    out = ROOT / "REPORT.docx"
+    out = ROOT / (sys.argv[2] if len(sys.argv) > 2 else src.with_suffix(".docx").name)
     with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as tmp:
         tmp.write(md)
-    subprocess.run(["pandoc", tmp.name, "-f", "markdown", "-t", "docx", "--toc", "--toc-depth=2",
+    # Only the long report needs a table of contents.
+    toc = ["--toc", "--toc-depth=2", "-M", "toc-title=Contents"] if src.name == "REPORT.md" else []
+    subprocess.run(["pandoc", tmp.name, "-f", "markdown", "-t", "docx", *toc,
                     "--shift-heading-level-by=-1", "-M", f"title={title}", "-M", f"subtitle={subtitle}",
-                    "-M", "toc-title=Contents", "-o", str(out)], check=True)
+                    "-o", str(out)], check=True)
     polish(out)
     print("wrote", out)
 

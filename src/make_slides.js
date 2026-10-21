@@ -128,12 +128,13 @@ function numberBadge(slide, x, y, n, colour) {
   s.addText([
     { text: "Our Random Forest: 1.560% error, i.e. 98.44% “accuracy”.", options: { bullet: true, breakLine: true } },
     { text: "The naive forecast: 1.561%. Identical (p = 0.30).", options: { bullet: true, breakLine: true } },
+    { text: "Score the same forecasts on the return instead of the price and R² falls from 0.9994 to +0.00013.", options: { bullet: true, breakLine: true } },
     { text: "A Random Forest on raw prices has R² 0.993 yet is significantly worse than naive.", options: { bullet: true, breakLine: false } },
-  ], { x: 8.65, y: 2.5, w: 3.8, h: 2.9, isTextBox: true, margin: 0, fontFace: BODY, fontSize: 14, color: "26324A", paraSpaceAfter: 10, lineSpacing: 19 });
-  s.addText("Lower is better. All four models land within 0.03% of each other.", {
-    x: M, y: 5.75, w: 8, h: 0.4, isTextBox: true, margin: 0, fontFace: BODY, fontSize: 12, italic: true, color: GREY,
+  ], { x: 8.65, y: 2.5, w: 3.8, h: 3.1, isTextBox: true, margin: 0, fontFace: BODY, fontSize: 13.5, color: "26324A", paraSpaceAfter: 9, lineSpacing: 18 });
+  s.addText("Lower is better. All four models land within 0.03% of each other — because price-level error measures the price, not the forecast.", {
+    x: M, y: 5.75, w: 8, h: 0.5, isTextBox: true, margin: 0, fontFace: BODY, fontSize: 12, italic: true, color: GREY,
   });
-  s.addNotes("Direction accuracy is the fairer measure: ours is 51.8%, below the 52.8% you get by always predicting the majority direction.");
+  s.addNotes("The honest units are returns. Our forecasts vary by only 10.8 basis points while real next-day returns vary by 245 — the model hedges to near-zero, which is exactly what makes the price numbers look good. Direction accuracy is 51.8%, below the 52.8% you get by always predicting the majority direction.");
 }
 
 /* ------------------------------------------------ 4. Papers 1-3 */
@@ -331,7 +332,7 @@ function numberBadge(slide, x, y, n, colour) {
   const s = pres.addSlide();
   titleBar(s, "Results", "What the audit found");
   const cells = [
-    ["Accuracy", "98.44%", "price accuracy — but identical to the naive forecast (p = 0.30)", NAVY],
+    ["Accuracy", "R² 0.0001", "on the next-day return — no better than predicting no change (p = 0.97), though it reads as 98.44% in price units", NAVY],
     ["Faithful", "13×", "top-SHAP features move forecasts 13× more than random ones", AMBER],
     ["Stable", "τ 0.85", "SHAP agrees across random seeds; LIME only ρ 0.48 between runs", NAVY],
     ["Agreement", "τ 0.03", "SHAP vs accuracy-based importance: only 4 of 32 features help accuracy", AMBER],

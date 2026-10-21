@@ -41,14 +41,17 @@
 
 Recent studies (Section 3) share two linked weaknesses.
 
-**Problem 1: accuracy is reported without a meaningful benchmark.**
-* Price forecasts are often judged by price-level accuracy (R², "accuracy %"). When returns
-  are evaluated properly, the signal is weak: Indra et al. (2025) found near-zero R² and 49–54%
-  directional accuracy.
-* But a stock's price tomorrow is almost the same as today. The naive forecast "tomorrow's
-  price = today's price" already scores R² ≈ 0.999.
-* Without comparing against that naive forecast and testing the difference, a reader can't
-  tell whether a model has any real predictive skill.
+**Problem 1: accuracy is reported in the wrong units, and without a meaningful benchmark.**
+* Price forecasts are usually judged on the **price level** (R², MAPE, "accuracy %"). But a
+  stock's price tomorrow is almost the same as today, so the naive forecast "tomorrow's price
+  = today's price" already scores R² ≈ 0.999 and MAPE ≈ 1.5%. Those figures describe the
+  behaviour of daily stock prices, not the quality of a model.
+* The quantity a forecaster actually has to get right is the **return** — the change. Scored
+  on returns, the same forecasts that look near-perfect routinely explain **less than 0.1%**
+  of the variance; Indra et al. (2025) found near-zero R² and 49–54% directional accuracy once
+  they looked there.
+* Without reporting return-space skill and testing it against a naive forecast, a reader
+  cannot tell whether a model has any predictive value at all.
 
 **Problem 2: explanations are presented as findings, but never tested.** Studies report
 SHAP or LIME outputs ("volume is the most important feature") as insight about the market.
@@ -75,7 +78,7 @@ misplaced trust.
 | **Output** | Forecast of the next-day closing price *P̂*ᵢ,ₜ₊₁ |
 | **Model** | Random Forest *f* predicting the next-day log return *r̂* = *f*(**x**ᵢ,ₜ); price forecast *P̂*ᵢ,ₜ₊₁ = *P*ᵢ,ₜ · exp(*r̂*) |
 | **Explanations** | A SHAP vector **φ**ᵢ,ₜ ∈ ℝ³² and a LIME weight vector **λ**ᵢ,ₜ ∈ ℝ³² for every explained forecast |
-| **Evaluation** | Accuracy vs naive persistence (Diebold–Mariano test), plus a reliability audit of **φ** and **λ**: faithfulness, stability, agreement, sanity, regime and sector drift |
+| **Evaluation** | Primary: return-space skill (R² against a zero-return and a drift forecast, IC, direction accuracy, decile portfolio) tested against naive persistence with a Diebold–Mariano test. Secondary: price-space accuracy, reported for comparability with the literature. Plus a reliability audit of **φ** and **λ**: faithfulness, stability, agreement, sanity, regime and sector drift |
 
 ### 1.4 Problem statement
 
@@ -92,7 +95,7 @@ misplaced trust.
 
 | # | Research question |
 |---|---|
-| **RQ1** | How accurate is the Random Forest's next-day closing-price forecast (Jan 2019 – May 2022), and how much of that accuracy exceeds naive persistence? |
+| **RQ1** | How much skill does the Random Forest have on the quantity it predicts — the next-day **return** (Jan 2019 – May 2022) — and how much of its apparent price-level accuracy survives once it is scored in return space against naive persistence? |
 | **RQ2** | Which features and feature families drive the forecasts, globally and for individual stock-days? |
 | **RQ3** | Are the SHAP explanations faithful to the model, and stable across random seeds and yearly retraining? |
 | **RQ4** | Do the explanations change significantly across market regimes and GICS sectors? |
@@ -103,8 +106,11 @@ misplaced trust.
 
 1. **Forecaster.** Build a leakage-free, walk-forward Random Forest next-day price
    forecaster for 474 stocks.
-2. **Honest accuracy.** Benchmark it against naive persistence, historical drift, Ridge
-   regression and a price-level Random Forest, with Diebold–Mariano and binomial tests.
+2. **Honest accuracy.** Score it in **return space** first — out-of-sample R² against a
+   zero-return and a drift forecast, information coefficient, direction accuracy and a decile
+   portfolio — and benchmark it against naive persistence, historical drift, Ridge regression
+   and a price-level Random Forest with Diebold–Mariano and binomial tests. Report
+   price-space accuracy second, for comparability with the literature.
 3. **Explanations.** Explain every forecast with TreeSHAP and LIME, and compare four
    explainers (TreeSHAP, LIME, permutation importance, MDI).
 4. **Reliability audit.** Test the explanations for faithfulness, stability and sanity
@@ -124,15 +130,18 @@ misplaced trust.
   * news or sentiment data;
   * fundamentals;
   * intraday data;
-  * trading costs;
+  * realistic execution modelling (a single flat 10 bp round-trip cost is applied to the
+    decile portfolio as a sanity check, but slippage, market impact and borrow costs are not
+    modelled);
   * portfolio optimisation;
   * deep-learning models.
 
 ### 1.8 Contributions
 
-1. **Benchmarked accuracy.** Shows that a Random Forest's 98.4% price accuracy equals naive
-   persistence, and that a price-level Random Forest is significantly *worse* than naive
-   despite R² = 0.993.
+1. **Benchmarked accuracy, in the right units.** Shows that one set of Random Forest
+   forecasts scores R² 0.9994 on the price level and +0.00013 on the return, that its 98.4%
+   "price accuracy" is matched exactly by naive persistence, and that a price-level Random
+   Forest is significantly *worse* than naive despite R² = 0.993.
 2. **A five-part reliability audit of SHAP and LIME** for stock forecasting: faithfulness,
    stability, explainer agreement, sanity, and regime and sector drift.
 3. **A direct SHAP-vs-LIME comparison** on the same forecasts: agreement, run-to-run
@@ -286,14 +295,20 @@ to $3,000, and avoids a tree's inability to predict beyond the price range seen 
   3. Ridge regression on the same features;
   4. RF on raw price levels (close, 4 lags, open/high/low, moving averages in $);
   5. RF classifier for next-day direction.
-* **Metrics:**
-  * price: MAE, RMSE, MAPE, R², share within 1% and 2%;
-  * return skill: out-of-sample R² vs a zero forecast, daily IC and Rank IC, directional
-    accuracy, AUC;
-  * economic: top-minus-bottom decile next-day return.
+* **Metrics.** Every model produces one forecast, which is then scored twice:
+  * **return skill (primary)** — MAE and RMSE in basis points, out-of-sample R² against a
+    zero-return forecast *and* against the historical drift, daily IC, Rank IC, ICIR,
+    directional accuracy, AUC (classifier), and the standard deviation of the forecasts
+    themselves against the realised 245 bp;
+  * **price accuracy (secondary, for comparability)** — MAE, RMSE, MAPE, R², share within
+    1% and 2%;
+  * **economic** — mean next-day return of each decile of the predicted return, the
+    long-short decile spread, its t-statistic and annualised Sharpe ratio, and its value net
+    of an assumed 10 bp round-trip transaction cost.
 * **Significance tests:**
-  * Diebold–Mariano test (Newey–West, 5 lags) on daily mean squared percentage error vs
-    naive;
+  * Diebold–Mariano test (Newey–West, 5 lags) on the daily mean squared **return** error vs a
+    zero-return forecast, and on the daily mean squared percentage **price** error vs naive
+    persistence;
   * binomial test of directional accuracy vs "always predict the majority direction".
 
 ### 6.4 Explanation methods
@@ -319,8 +334,9 @@ to $3,000, and avoids a tree's inability to predict beyond the price range seen 
 **Derived explanations.**
 * **Global:** mean |SHAP| and mean |LIME weight| per feature.
 * **Feature-family shares:** each family's share of total |SHAP|.
-* **Local, in dollars:** attribution × close price ≈ each feature's dollar contribution to
-  the next-day price forecast.
+* **Local, in basis points:** each feature's contribution to the forecast next-day return,
+  in the model's own unit (the dollar equivalent, attribution × close price, is reported
+  alongside).
 
 ### 6.5 Reliability audit
 
@@ -343,53 +359,120 @@ to $3,000, and avoids a tree's inability to predict beyond the price range seen 
 
 ## 7. Results
 
-### 7.1 RQ1: price accuracy
+### 7.1 RQ1: forecast skill
 
-**Overall test performance** (405,545 stock-days, Jan 2019 – May 2022):
+The model predicts a **next-day log return**; the price forecast is only that return applied
+to today's close. Skill is therefore measured on returns first. Price-space accuracy follows,
+because that is what the literature quotes — and the distance between the two verdicts is
+itself the first result of this project.
 
-| Model | MAPE | "Price accuracy" (100 − MAPE) | RMSE | R² (price) | Within 2% | Direction accuracy | DM vs naive (p) |
-|---|---|---|---|---|---|---|---|
-| Naive (tomorrow = today) | 1.561% | 98.44% | $6.25 | 0.99938 | 75.3% | – | – |
-| Historical drift | 1.560% | 98.44% | $6.25 | 0.99938 | 75.4% | 52.8% | 0.25 |
-| Ridge regression | 1.567% | 98.43% | $6.27 | 0.99937 | 75.3% | 51.7% | 0.17 |
-| RF on price levels | 1.583% | 98.42% | **$21.56** | 0.99261 | 75.0% | 50.8% | **< 0.001 (worse)** |
-| **Random Forest (proposed)** | **1.560%** | **98.44%** | **$6.25** | **0.99938** | **75.4%** | **51.8%** | 0.30 |
-| RF classifier (direction) | – | – | – | – | – | 51.9% (AUC 0.505) | – |
+#### 7.1.1 Return space (the quantity the model predicts)
+
+405,545 stock-days, Jan 2019 – May 2022. The realised next-day return has a standard
+deviation of **245 bp** (1 bp = 0.01%).
+
+| Model | RMSE (bp) | R² vs zero-return | R² vs drift | Daily IC (t) | Direction | DM vs zero-return (p) |
+|---|---|---|---|---|---|---|
+| Naive (tomorrow = today, i.e. *r̂* = 0) | 245.5 | 0.00000 | −0.00043 | – | 47.2% | – |
+| Historical drift | 245.5 | +0.00043 | 0.00000 | – | 52.8% | 0.64 |
+| Ridge regression | 246.9 | −0.01076 | −0.01120 | +0.0019 (0.30) | 51.7% | 0.39 |
+| RF on price levels | 250.4 | **−0.03972** | −0.04016 | +0.0063 (2.24) | 50.8% | **< 0.001 (worse)** |
+| **Random Forest (proposed)** | **245.5** | **+0.00013** | −0.00030 | **+0.0090 (1.39)** | 51.8% | 0.97 |
+| Majority-direction rule | – | – | – | – | **52.8%** | – |
 
 **What this shows.**
-* **Accurate as a price forecast.** The Random Forest is within 1.56% of the actual next-day
-  close on average (98.44% price accuracy, R² 0.9994), and within 2% on 75% of stock-days.
-* **But no better than naive.** Naive persistence scores the same; the difference is not
-  significant (Diebold–Mariano p = 0.30).
-* **Almost no skill beyond persistence:**
-  * out-of-sample return R² = +0.0001;
-  * daily IC = +0.009 (t = 1.39, not significant);
-  * direction accuracy 51.8%, below "always predict the majority direction" (52.8%).
-* **A small, non-significant economic signal:** the top-minus-bottom decile of predicted
-  returns earned +8.0 bp/day (t = 1.50).
+* **Essentially no return skill.** The proposed model explains **0.013%** of next-day return
+  variance, and the Diebold–Mariano test cannot distinguish it from simply predicting zero
+  (p = 0.97). Against the slightly stronger drift benchmark the sign flips (R² = −0.0003).
+* **The model hedges to near-zero.** Its forecasts have a standard deviation of **10.8 bp**
+  against the realised **245 bp** — a range **23× narrower than reality**. That is the
+  statistically correct response to a near-unpredictable target, and it is precisely why the
+  price forecasts in §7.1.2 look so good.
+* **Mean absolute return error 156 bp**, against a realised mean absolute move of the same
+  order: the error is as large as the thing being predicted.
+* **Direction accuracy 51.8%** is *below* the "always predict the majority direction" rule
+  (52.8%); the binomial test gives p = 1.00.
+* **The price-level Random Forest is the only model significantly different from the
+  benchmark — in the wrong direction** (R² = −0.040, DM p < 0.001). Training a tree on raw
+  price levels actively destroys return information.
 
-**The price-level Random Forest shows why unbenchmarked accuracy misleads.**
+#### 7.1.2 Price space (what the literature reports)
+
+The same forecasts, scored on the next-day closing price:
+
+| Model | MAPE | "Price accuracy" (100 − MAPE) | RMSE | R² (price) | Within 2% | DM vs naive (p) |
+|---|---|---|---|---|---|---|
+| Naive (tomorrow = today) | 1.561% | 98.44% | $6.25 | 0.99938 | 75.3% | – |
+| Historical drift | 1.560% | 98.44% | $6.25 | 0.99938 | 75.4% | 0.25 |
+| Ridge regression | 1.567% | 98.43% | $6.27 | 0.99937 | 75.3% | 0.17 |
+| RF on price levels | 1.583% | 98.42% | **$21.56** | 0.99261 | 75.0% | **< 0.001 (worse)** |
+| **Random Forest (proposed)** | **1.560%** | **98.44%** | **$6.25** | **0.99938** | **75.4%** | 0.30 |
+| RF classifier (direction) | – | – | – | – | – | 51.9% accuracy (AUC 0.505) |
+
+**The same model, two verdicts.**
+
+| Scored on | R² | Reading |
+|---|---|---|
+| The price level | **0.9994** | "Near-perfect forecaster" |
+| The next-day return | **+0.00013** | "Indistinguishable from predicting no change" |
+
+Both numbers come from one set of forecasts. Price-space R² is high because tomorrow's price
+is almost today's price, so the denominator (the variance of the price level across stocks
+and months) is enormous compared with the one-day error. **It measures the price level, not
+the forecast.** "98.44% accuracy" is a property of daily stock prices, not an achievement of
+the model — naive persistence scores the same figure to three decimal places.
+
+**The price-level Random Forest shows the second failure mode.**
 * It reports R² 0.993 and 98.4% "accuracy".
-* Yet its RMSE is 3.4× naive, and it is significantly *worse* than naive (DM p < 0.001).
-* Its RMSE grows from $6 (2019) to $36 (2021) as prices trend to new highs, because trees
-  can't predict above the training range.
+* Yet its RMSE is 3.4× naive and it is significantly *worse* than naive (DM p < 0.001).
+* Its RMSE grows from $6 (2019) to $36 (2021) as prices trend to new highs, because a tree
+  cannot predict above the price range it was trained on.
 
-**By year and regime.**
+#### 7.1.3 Economic view
 
-| Period | RF MAPE | Naive MAPE | RF direction accuracy | Majority-direction rule | RF daily IC |
-|---|---|---|---|---|---|
-| 2019 | 1.11% | 1.12% | 53.5% | 55.3% | +0.014 |
-| 2020 | 2.20% | 2.20% | 51.0% | 51.8% | +0.018 |
-| 2021 | 1.29% | 1.29% | 50.4% | 53.2% | −0.008 |
-| 2022 (Jan–May) | 1.74% | 1.74% | 52.7% | 51.5% | +0.018 |
-| COVID crash | 5.78% | 5.72% | 34.7% | 65.8% (down) | −0.073 |
+Sorting each day's 474 stocks by predicted return and measuring what each decile actually
+returned:
 
-* **COVID crash:** the RF was significantly worse than naive (DM p = 0.04), because it kept
-  forecasting small rebounds while 66% of stock-days fell.
-* **By sector:** MAPE ranges from 1.13% (Utilities) to 2.24% (Energy), and the RF equals
-  naive within 0.004 percentage points in every sector.
+| Decile of predicted return | 1 (lowest) | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 (highest) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Mean actual next-day return (bp) | +1.3 | +6.2 | +3.8 | +5.2 | +6.2 | +4.6 | +5.8 | +6.4 | +6.4 | **+9.5** |
 
-Figures: `price_accuracy.png`, `price_paths_AAPL.png`.
+* The ranking is **weakly monotone** (Spearman ρ = 0.75 across deciles), so the forecasts do
+  carry a little cross-sectional information even though their level is uninformative.
+* **Long-short (decile 10 − decile 1): +8.2 bp/day**, t = 1.53, annualised Sharpe 0.83 — not
+  statistically significant.
+* At an assumed 10 bp round-trip cost the strategy returns **−1.8 bp/day**, i.e. it loses
+  money. This is the honest economic conclusion.
+
+#### 7.1.4 Where the little skill there is actually lives
+
+| Period | RMSE (bp) | R² vs zero | DM p | Daily IC | Direction | Majority rule | Long-short (bp/day) |
+|---|---|---|---|---|---|---|---|
+| 2019 | 164.0 | +0.00212 | 0.63 | +0.014 | 53.5% | 55.3% | – |
+| 2020 | 348.0 | −0.00016 | 0.98 | +0.018 | 51.0% | 51.8% | – |
+| 2021 | 182.0 | +0.00046 | 0.87 | −0.008 | 50.4% | 53.2% | – |
+| 2022 (Jan–May) | 242.5 | −0.00113 | 0.91 | +0.018 | 52.7% | 51.5% | – |
+| Pre-COVID bull | 164.4 | +0.00069 | 0.87 | +0.015 | 53.0% | 55.2% | +6.9 |
+| **COVID crash** | **766.3** | **−0.01171** | 0.13 | **−0.073** | **34.7%** | 65.8% (down) | **−119.0** |
+| **Recovery** | 233.9 | **+0.00665** | **0.043** | +0.008 | 51.6% | 53.3% | **+16.1** |
+| 2022 bear | 242.5 | −0.00113 | 0.91 | +0.018 | 52.7% | 51.5% | +5.6 |
+
+Two findings here are visible only in return space:
+* **The recovery is the one period with detectable skill.** From March 2020 to December 2021
+  the model beat a zero-return forecast significantly (R² +0.0067, DM p = 0.043) and its
+  long-short spread earned +16.1 bp/day. In price space this period looks no different from
+  any other (MAPE 1.585% vs naive 1.589%).
+* **The crash is where it was actively wrong.** During the COVID crash direction accuracy fell
+  to 34.7%, the daily IC turned **negative** (−0.073) and the long-short spread lost 119
+  bp/day, because the model kept forecasting small rebounds while 66% of stock-days fell.
+  A user would have relied on it most at exactly the moment it inverted.
+
+**By sector**, return R² runs from +0.0028 (Information Technology) to −0.0009 (Consumer
+Discretionary) and daily IC from +0.025 (Energy) to −0.016 (Real Estate) — all within noise,
+but none of this variation is visible in price space, where MAPE differs by less than 0.004
+percentage points between the RF and naive in every sector.
+
+Figures: `return_skill.png`, `price_vs_return.png`, `decile_portfolio.png`, `price_accuracy.png`, `price_paths_AAPL.png`.
 
 ### 7.2 RQ2: what drives the forecasts (SHAP)
 
@@ -417,11 +500,19 @@ Figures: `price_accuracy.png`, `price_paths_AAPL.png`.
 
 The model mainly learned **market-wide short-term reversal after volatile sell-offs**.
 
-**Local example: AAPL on 16 March 2020** (worst day of the COVID crash):
-* close $59.64 → forecast $59.82; actual next close $62.27;
-* **pushing the forecast up:** market volatility (+$0.08), the −17.8% 5-day market fall
-  (+$0.04);
-* **pushing it down:** the −13.7% market day (−$0.01) and the overnight gap (−$0.01).
+**Local example: AAPL on 16 March 2020** (worst day of the COVID crash). Contributions are
+given in basis points of forecast return, the model's own unit:
+* forecast **+30 bp**; the stock actually rose **+430 bp** ($59.64 → $59.82 forecast, $62.27
+  actual);
+* **pushing the forecast up:** market 20-day volatility (**+12.9 bp**), the −17.8% 5-day
+  market fall (**+7.4 bp**), the stock's own −29% 20-day return (+1.9 bp);
+* **pushing it down:** the −13.7% market day (**−2.2 bp**) and the overnight gap (−1.7 bp).
+
+The explanation is coherent — it is the reversal rule, correctly applied — and the direction
+is right. But every contribution is an order of magnitude too small, which is the local view
+of the same 23×-too-narrow dispersion found in §7.1.1. In dollars these contributions would
+read as 8, 4 and 1 cents and look merely small; in return units it is clear that the whole
+explanation accounts for one fourteenth of the move.
 
 Figures: `shap_global.png`, `shap_dependence.png`, `local_explanations.png`.
 
@@ -552,12 +643,19 @@ Figures: `lime_vs_shap_local.png`, `lime_reliability.png`, `explainer_agreement.
 
 ## 8. Discussion
 
-1. **High price accuracy needs a benchmark to mean anything.**
-   * The Random Forest's 98.44% price accuracy is real, but naive persistence scores exactly
-     the same, and a price-level Random Forest with R² 0.993 is significantly worse than
-     naive.
-   * Accuracy claims without a persistence baseline cannot be interpreted. This matches
-     the weak signal Indra et al. (2025) found once returns were evaluated properly.
+1. **Score the change, not the level.**
+   * One set of forecasts scores R² 0.9994 on the price and +0.00013 on the return. The first
+     number is a property of daily stock prices — naive persistence matches it exactly — and
+     only the second says anything about the model.
+   * The forecasts themselves vary by 10.8 bp against a realised 245 bp: the model is
+     correctly refusing to commit, which is what produces the flattering price figures.
+   * A price-level Random Forest with R² 0.993 is significantly *worse* than naive in both
+     spaces. Accuracy claims reported in price units, without a persistence baseline, cannot
+     be interpreted at all. This matches the weak signal Indra et al. (2025) found once
+     returns were evaluated properly.
+   * Return space also localises what little skill exists: significant only in the 2020–21
+     recovery (R² +0.0067, DM p = 0.043) and inverted during the COVID crash (IC −0.073,
+     direction 34.7%). Neither is visible in the price-space numbers.
 2. **Faithful does not mean the market insight is real.**
    * SHAP is faithful (fidelity ≥ 0.98), seed-stable (τ = 0.85) and passes the sanity check.
    * Yet SHAP, LIME and MDI all disagree with permutation importance (τ ≤ 0.15).
@@ -597,7 +695,9 @@ Figures: `lime_vs_shap_local.png`, `lime_reliability.png`, `explainer_agreement.
 * **Faithfulness test:** it replaces features with values from random training rows, which
   can create unrealistic feature combinations.
 * **Regimes and costs:** regimes are calendar-defined; the COVID crash has only 23 trading
-  days. Transaction costs are not modelled.
+  days. The decile portfolio charges one flat 10 bp round-trip cost and ignores slippage,
+  market impact, shorting costs and capacity, so the net −1.8 bp/day figure is an optimistic
+  bound rather than a backtest.
 * **Literature gaps:** stated from abstracts and public details; verify against full
   texts before submission.
 
@@ -605,9 +705,12 @@ Figures: `lime_vs_shap_local.png`, `lime_reliability.png`, `explainer_agreement.
 
 ## 10. Conclusion
 
-* **Accuracy.** A walk-forward Random Forest forecasts next-day closing prices for 474
-  S&P 500 stocks with 98.44% price accuracy (MAPE 1.56%, R² 0.9994). That is statistically
-  identical to naive persistence, with 51.8% directional accuracy.
+* **Accuracy.** A walk-forward Random Forest predicts the next-day **return** for 474 S&P
+  500 stocks with an out-of-sample R² of **+0.00013** — statistically indistinguishable from
+  predicting no change at all (DM p = 0.97) — and 51.8% directional accuracy, below the
+  52.8% majority rule. Converted to prices, the identical forecasts read as 98.44% "price
+  accuracy" (MAPE 1.56%, R² 0.9994), a figure naive persistence matches exactly. Its decile
+  ranking earns +8.2 bp/day gross (t = 1.53) and loses money after a 10 bp trading cost.
 * **SHAP explanations** are:
   * faithful and seed-stable;
   * clearly different from a no-signal model;
@@ -619,7 +722,9 @@ Figures: `lime_vs_shap_local.png`, `lime_reliability.png`, `explainer_agreement.
 * **Recommendations for stock-forecasting studies:**
   1. benchmark accuracy against persistence;
   2. prefer TreeSHAP to single LIME runs for tree models;
-  3. test explanations for faithfulness, stability, sanity and regime drift before
+  3. report skill in return space, and treat price-level R² and "accuracy %" as
+     descriptive statistics of the price series rather than as results;
+  4. test explanations for faithfulness, stability, sanity and regime drift before
      reading them as market insight.
 
 ---

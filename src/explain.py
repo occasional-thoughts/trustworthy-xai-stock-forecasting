@@ -4,7 +4,8 @@ Explanations
   X1  Global importance from three explainers: TreeSHAP (mean |SHAP|), permutation
       importance on test data, and impurity importance (MDI); agreement via Kendall's tau
   X2  Feature-family shares of SHAP (past returns, trend, oscillators, volatility, ...)
-  X3  Local explanations in dollars for chosen stock-days (SHAP x close price)
+  X3  Local explanations for chosen stock-days, in basis points of next-day return
+      (the model's own unit) with the dollar equivalent
   X4  Explanation drift across market regimes and across GICS sectors, with permutation tests
 Reliability checks
   R1  Faithfulness: removing the top-|SHAP| features must move the forecast more than
@@ -189,7 +190,8 @@ def main():
     regime_top5 = {r: [FEATURES[j] for j in np.argsort(-A[meta.regime.values == r].mean(0))[:5]] for r in reg_names}
     print(f"regime drift p={regimes['p_value']:.3f}, sector drift p={sectors['p_value']:.3f}  [{time.time() - t_start:.0f}s]", flush=True)
 
-    # ---- X3: local explanations in dollars ----
+    # ---- X3: local explanations in basis points (the unit the model predicts in),
+    #      with the dollar equivalent alongside ----
     local = {}
     for ticker, day in [("AAPL", "2020-03-16"), ("AAPL", "2019-06-03"), ("XOM", "2020-03-09"), ("JPM", "2022-05-18")]:
         hit = meta.index[(meta.ticker == ticker) & (meta.date == pd.Timestamp(day))]
@@ -197,13 +199,16 @@ def main():
             continue
         i = hit[0]
         close = float(meta.close[i])
-        dollars = S[i] * close
-        top = np.argsort(-np.abs(dollars))[:8]
+        bp = 1e4 * S[i]
+        top = np.argsort(-np.abs(bp))[:8]
         local[f"{ticker} {day}"] = {
             "close": close, "predicted_close": close * float(np.exp(meta.pred_ret[i])),
             "actual_next_close": close * float(np.exp(meta.target_ret[i])),
             "base_value_ret": float(meta.base_value[i]), "pred_ret": float(meta.pred_ret[i]),
-            "top_contributions_$": {FEATURES[j]: {"value": float(X_all[i, j]), "dollars": float(dollars[j])} for j in top},
+            "base_value_bp": float(1e4 * meta.base_value[i]), "pred_ret_bp": float(1e4 * meta.pred_ret[i]),
+            "actual_ret_bp": float(1e4 * meta.target_ret[i]),
+            "top_contributions_bp": {FEATURES[j]: {"value": float(X_all[i, j]), "bp": float(bp[j]),
+                                                   "dollars": float(bp[j] / 1e4 * close)} for j in top},
         }
 
     # ---- R1: faithfulness ----

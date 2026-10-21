@@ -265,15 +265,16 @@ def fig_local(xai):
     cases = list(xai["X3_local"].items())[:2]
     fig, axes = plt.subplots(1, len(cases), figsize=(11, 3.4), gridspec_kw={"wspace": 0.75})
     for ax, (name, c) in zip(np.atleast_1d(axes), cases):
-        items = list(c["top_contributions_$"].items())[::-1]
-        vals = [v["dollars"] for _, v in items]
+        items = list(c["top_contributions_bp"].items())[::-1]
+        vals = [v["bp"] for _, v in items]
         labels = [f"{k} = {v['value']:.3g}" for k, v in items]
         ax.barh(labels, vals, color=[POS if v >= 0 else NEG for v in vals], height=0.6, edgecolor=SURFACE, linewidth=1.5)
         ax.axvline(0, color=AXIS, linewidth=0.8)
         ax.grid(axis="y", visible=False)
-        ax.set_xlabel("contribution to next-day price forecast ($)")
-        ax.set_title(f"{name}: close ${c['close']:.2f} → forecast ${c['predicted_close']:.2f} "
-                     f"(actual ${c['actual_next_close']:.2f})", fontsize=9.5)
+        ax.set_xlabel("contribution to the forecast next-day return (bp)")
+        ax.set_title(f"{name}: forecast {c['pred_ret_bp']:+.0f} bp, actual {c['actual_ret_bp']:+.0f} bp\n"
+                     f"(${c['close']:.2f} → ${c['predicted_close']:.2f}, actually ${c['actual_next_close']:.2f})",
+                     fontsize=9.5)
     save(fig, "local_explanations.png")
 
 
@@ -321,12 +322,106 @@ def fig_stability(xai):
     save(fig, "stability_sanity.png")
 
 
+def fig_return_skill(metrics):
+    """The primary scoreboard: skill in the space the model predicts in."""
+    o = metrics["overall"]
+    labels = list(PRICE_MODELS)
+    r2 = [o[l]["R2_oos_vs_zero"] for l in labels]
+    direc = [100 * o[l]["direction_acc"] for l in labels]
+    majority = 100 * o["majority_direction_acc"]
+    fig, axes = plt.subplots(1, 2, figsize=(10.5, 3.2), gridspec_kw={"wspace": 0.95})
+
+    colors = [SERIES[0] if "proposed" in l else AXIS for l in labels]
+    bars = axes[0].barh(labels, r2, color=colors, height=0.6, edgecolor=SURFACE, linewidth=2)
+    axes[0].axvline(0, color=INK2, linewidth=1)
+    axes[0].set_title("Out-of-sample R² on the next-day return\n(0 = no better than predicting zero)")
+    axes[0].set_xlim(min(r2) * 1.45, max(abs(min(r2)), 0.004) * 0.55)
+    for b, v in zip(bars, r2):
+        off = 5 if v >= 0 else -5
+        axes[0].annotate(f"{v:+.5f}", (v, b.get_y() + b.get_height() / 2), xytext=(off, 0),
+                         textcoords="offset points", va="center", ha="left" if v >= 0 else "right",
+                         color=INK2, fontsize=9)
+
+    bars = axes[1].barh(labels, direc, color=colors, height=0.6, edgecolor=SURFACE, linewidth=2)
+    axes[1].axvline(majority, color=SERIES[1], linewidth=1.4, linestyle="--")
+    axes[1].annotate(f"majority-direction\nrule {majority:.1f}%", xy=(majority, 0.97),
+                     xycoords=("data", "axes fraction"), xytext=(5, 0), textcoords="offset points",
+                     ha="left", va="top", color=SERIES[1], fontsize=8.5, linespacing=1.3)
+    axes[1].set_title("Direction accuracy (up or down)")
+    axes[1].set_xlim(45, 56)
+    for b, v in zip(bars, direc):
+        axes[1].annotate(f"{v:.1f}%", (v, b.get_y() + b.get_height() / 2), xytext=(4, 0),
+                         textcoords="offset points", va="center", color=INK2, fontsize=9)
+    for ax in axes:
+        ax.invert_yaxis()
+        ax.grid(axis="y", visible=False)
+    save(fig, "return_skill.png")
+
+
+def fig_price_vs_return(metrics, pred):
+    """Why this project scores returns, not prices: one set of forecasts, two verdicts."""
+    o = metrics["overall"]
+    rf = o["Random Forest (proposed)"]
+    fig, axes = plt.subplots(1, 2, figsize=(10.5, 3.4), gridspec_kw={"wspace": 0.3, "width_ratios": [1, 1.35]})
+
+    names = ["Scored on the\nprice level", "Scored on the\nnext-day return"]
+    vals = [rf["R2_price"], rf["R2_oos_vs_zero"]]
+    bars = axes[0].bar(names, vals, color=[AXIS, SERIES[0]], width=0.55, edgecolor=SURFACE, linewidth=2)
+    axes[0].set_ylim(0, 1.15)
+    axes[0].axhline(0, color=INK2, linewidth=1)
+    axes[0].set_ylabel("R²")
+    axes[0].set_title("The same Random Forest forecasts,\nscored two ways")
+    axes[0].grid(axis="x", visible=False)
+    for b, v in zip(bars, vals):
+        axes[0].annotate(f"{v:.4f}" if v > 0.5 else f"{v:+.5f}", (b.get_x() + b.get_width() / 2, max(v, 0)),
+                         xytext=(0, 4), textcoords="offset points", ha="center", color=INK2, fontsize=10)
+
+    actual = 1e4 * pred["target_ret"].values
+    predicted = 1e4 * pred["ret_rf"].values
+    bins = np.linspace(-600, 600, 121)
+    axes[1].hist(actual, bins=bins, color=AXIS, alpha=0.55, label=f"actual next-day return (sd {actual.std():.0f} bp)")
+    axes[1].hist(predicted, bins=bins, color=SERIES[0], label=f"forecast (sd {predicted.std():.1f} bp)")
+    axes[1].set_xlabel("next-day return (basis points, 100 bp = 1%)")
+    axes[1].set_ylabel("stock-days")
+    axes[1].set_yscale("log")
+    axes[1].legend(loc="upper right", fontsize=8.5)
+    axes[1].set_title(f"The forecasts barely move: they span a range "
+                      f"{actual.std() / predicted.std():.0f}× narrower than reality")
+    save(fig, "price_vs_return.png")
+
+
+def fig_deciles(metrics):
+    """Economic reading of the return forecasts: sort by prediction, hold the extremes."""
+    e = metrics["overall"]["economic"]
+    vals = [e["decile_mean_return_bp"][str(k)] if str(k) in e["decile_mean_return_bp"]
+            else e["decile_mean_return_bp"][k] for k in range(len(e["decile_mean_return_bp"]))]
+    fig, ax = plt.subplots(figsize=(6.6, 3.3))
+    colors = [SERIES[1]] + [AXIS] * (len(vals) - 2) + [SERIES[0]]
+    bars = ax.bar(range(1, len(vals) + 1), vals, color=colors, width=0.7, edgecolor=SURFACE, linewidth=2)
+    for b, v in zip(bars, vals):
+        ax.annotate(f"{v:.1f}", (b.get_x() + b.get_width() / 2, v), xytext=(0, 3),
+                    textcoords="offset points", ha="center", color=INK2, fontsize=8.5)
+    ax.set_xticks(range(1, len(vals) + 1))
+    ax.set_xlabel("decile of predicted next-day return (1 = lowest, 10 = highest)")
+    ax.set_ylabel("mean actual next-day return (bp)")
+    ax.grid(axis="x", visible=False)
+    ax.set_ylim(0, max(vals) * 1.25)
+    ax.set_title(f"Ranking has mild economic value: long-short spread "
+                 f"{e['long_short_bp_per_day']:+.1f} bp/day (t={e['long_short_t']:.2f}),\n"
+                 f"{e['long_short_net_bp_per_day']:+.1f} bp/day after "
+                 f"{e['assumed_round_trip_cost_bp']:.0f} bp of trading cost")
+    save(fig, "decile_portfolio.png")
+
+
 def main():
     style()
     FIGURES.mkdir(parents=True, exist_ok=True)
     metrics = json.loads((RESULTS / "metrics.json").read_text())
     xai = json.loads((RESULTS / "xai.json").read_text())
     pred = add_forecasts(pd.read_pickle(RESULTS / "predictions.pkl"))
+    fig_return_skill(metrics)
+    fig_price_vs_return(metrics, pred)
+    fig_deciles(metrics)
     fig_price_accuracy(metrics)
     fig_price_paths(pred)
     fig_shap_global()

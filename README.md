@@ -1,9 +1,16 @@
-# Trustworthy Explanations for Random-Forest Stock Price Forecasting
+# Trustworthy Explanations for Random-Forest Stock Return Forecasting
 
-A Random Forest forecasts the next-day closing price of 474 S&P 500 stocks. SHAP explains
-every forecast, and the project then tests whether those explanations can be trusted.
-The full write-up (problem statement, tech stack, literature review, research gap, method, results) is in
-**[REPORT.md](REPORT.md)**; the 5-paper literature review is also in [LITERATURE_REVIEW.md](LITERATURE_REVIEW.md).
+A Random Forest forecasts the **next-day return** of 474 S&P 500 stocks (the price forecast is
+that return applied to today's close). SHAP and LIME explain every forecast, and the project
+then tests whether those explanations can be trusted.
+
+The full write-up (problem statement, tech stack, literature review, research gap, method,
+results) is in **[REPORT.md](REPORT.md)**; the objective, model specification and system
+requirements are in **[OBJECTIVE_MODEL_REQUIREMENTS.md](OBJECTIVE_MODEL_REQUIREMENTS.md)**;
+the 5-paper literature review is also in [LITERATURE_REVIEW.md](LITERATURE_REVIEW.md).
+
+**The headline result in one line:** one set of forecasts scores **R² 0.9994 on the price
+level and +0.00013 on the return**. Only the second number says anything about the model.
 
 ## Pipeline
 
@@ -13,10 +20,12 @@ The full write-up (problem statement, tech stack, literature review, research ga
 | 2. Build 32 features + next-day targets | `src/features.py` | `data/features.pkl` |
 | 3. Tune RF on validation years 2017–2018 | `src/tune.py` | `results/tuning.json` |
 | 4. Walk-forward training, 2019 → May 2022 | `src/train.py` | `results/predictions.pkl`, `models/` |
-| 5. Accuracy vs baselines + significance tests | `src/evaluate.py` | `results/metrics.json` |
+| 5. Return-space skill and price-space accuracy vs baselines, with significance tests | `src/evaluate.py` | `results/metrics.json` |
 | 6. SHAP explanations + reliability checks | `src/explain.py` | `results/xai.json`, `results/importance.csv`, `results/shap_sample.pkl` |
 | 7. LIME explanations + SHAP-vs-LIME checks | `src/lime_explain.py` | `results/lime.json`, `results/lime_sample.pkl` |
 | 8. Figures | `src/plots.py` | `results/figures/*.png` |
+| 9. Markdown → Word | `src/make_docx.py [file.md]` | `REPORT.docx`, `OBJECTIVE_MODEL_REQUIREMENTS.docx` |
+| 10. Slide deck | `src/make_slides.js` | `LIT_REVIEW_SLIDES.pptx` (needs `pptxgenjs`) |
 
 ## Setup and run
 
@@ -64,9 +73,11 @@ Real extreme moves are kept, such as the 9 March 2020 oil crash (APA −54%, OXY
 
 ## Design
 
-* **Target:** the next-day close price. The RF predicts the next-day log return *r̂*, and
-  the price forecast is close × exp(*r̂*). Predicting returns rather than price levels
-  avoids a tree model's inability to extrapolate to new price highs.
+* **Target:** the next-day **log return** *r̂*. The price forecast, close × exp(*r̂*), is a
+  derived quantity and never the training target. Predicting returns rather than price levels
+  keeps every stock on one scale, avoids a tree's inability to extrapolate to new price highs,
+  and — most importantly — is the only space in which a score means anything, since price-level
+  R² is ≈ 0.999 for any method whatsoever.
 * **Features:** 32, all computed from data up to day *t*'s close, in 7 families:
   * past returns;
   * trend (distance from moving averages, MACD);
@@ -99,10 +110,13 @@ Test set: 405,545 stock-days, Jan 2019 – May 2022. Details in [REPORT.md](REPO
 
 | | Result |
 |---|---|
-| **Price accuracy** (RF) | MAPE 1.56% (98.44% "price accuracy"), RMSE $6.25, R² 0.9994, 75% of forecasts within 2% |
-| **Versus naive "tomorrow = today"** | Identical accuracy; difference not significant (Diebold–Mariano p = 0.30) |
-| **RF on raw price levels** | R² 0.993 but RMSE $21.56, significantly worse than naive (p < 0.001) |
+| **Return skill** (RF, primary) | Out-of-sample R² **+0.00013** vs predicting zero change (DM p = 0.97); daily IC +0.009 (t = 1.39); RMSE 246 bp against a realised 245 bp |
+| **Forecast dispersion** | sd 10.8 bp vs realised 245 bp — the model hedges to near-zero, a range 23× narrower than reality |
 | **Direction accuracy** | 51.8%, below the "always predict the majority direction" rule (52.8%) |
+| **Economic value** | Decile ranking weakly monotone (ρ 0.75); long-short +8.2 bp/day (t = 1.53, Sharpe 0.83); **−1.8 bp/day after a 10 bp cost** |
+| **Where the skill lives** | Significant only in the 2020–21 recovery (R² +0.0067, DM p = 0.043); inverted in the COVID crash (IC −0.073, direction 34.7%, −119 bp/day) |
+| **Price accuracy** (RF, secondary) | MAPE 1.56% (98.44% "price accuracy"), RMSE $6.25, R² 0.9994, 75% within 2% — matched exactly by naive persistence (DM p = 0.30) |
+| **RF on raw price levels** | R² 0.993 but RMSE $21.56, and significantly worse than naive in both spaces (p < 0.001) |
 | **What drives forecasts** (SHAP) | 72% market & sector context (market volatility, 5-day and 1-day market return) |
 | **Faithfulness** | Removing the top-SHAP feature moves the forecast 13× more than a random one; fidelity r ≥ 0.98 |
 | **Seed stability** | Kendall τ 0.85 |
@@ -117,6 +131,9 @@ Test set: 405,545 stock-days, Jan 2019 – May 2022. Details in [REPORT.md](REPO
 
 | File | Shows |
 |---|---|
+| `return_skill.png` | Return-space R² and direction accuracy for every model |
+| `price_vs_return.png` | The same forecasts scored both ways, and how narrowly they move |
+| `decile_portfolio.png` | Actual return of each decile of predicted return, gross and net of cost |
 | `price_accuracy.png` | Error and within-2% rate for every model |
 | `price_paths_AAPL.png` | AAPL forecasts vs actual prices |
 | `shap_global.png` | Top 15 features by mean \|SHAP\| |
