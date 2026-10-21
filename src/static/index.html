@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SHAP vs LIME — Stock Forecast Explainer</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface-0: #f4f4f1;
+    --surface-1: #fcfcfb;
+    --border:    #e1e0d9;
+    --axis:      #c3c2b7;
+    --text-1:    #0b0b0b;
+    --text-2:    #52514e;
+    --text-3:    #898781;
+    --shap:      #2a78d6;
+    --lime:      #eb6834;
+    --good:      #1baf7a;
+    --bad:       #e34948;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --surface-0: #121211;
+      --surface-1: #1a1a19;
+      --border:    #35342f;
+      --axis:      #4a4943;
+      --text-1:    #f0efec;
+      --text-2:    #c3c2b7;
+      --text-3:    #898781;
+      --shap:      #3987e5;
+      --lime:      #d95926;
+      --good:      #199e70;
+      --bad:       #e66767;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface-0: #121211; --surface-1: #1a1a19; --border: #35342f; --axis: #4a4943;
+    --text-1: #f0efec; --text-2: #c3c2b7; --text-3: #898781;
+    --shap: #3987e5; --lime: #d95926; --good: #199e70; --bad: #e66767;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--surface-0); color: var(--text-1);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 32px 16px 72px; }
+  header h1 { font-size: 26px; margin: 0 0 6px; letter-spacing: -0.015em; }
+  header p { margin: 0 0 28px; color: var(--text-2); max-width: 72ch; }
+  .card {
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px 22px; margin-bottom: 20px;
+  }
+  .card h2 { font-size: 15px; margin: 0 0 4px; letter-spacing: 0.02em; text-transform: uppercase; color: var(--text-3); }
+  .card .sub { margin: 0 0 18px; color: var(--text-2); font-size: 14px; }
+  /* ---- controls ---- */
+  .controls { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-3); }
+  select, button {
+    font: inherit; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface-1); color: var(--text-1); padding: 9px 12px; min-height: 40px;
+  }
+  select { min-width: 160px; }
+  button.primary { background: var(--shap); border-color: var(--shap); color: #fff; font-weight: 600; cursor: pointer; padding: 9px 20px; }
+  button.primary:hover { filter: brightness(1.08); }
+  button.primary:disabled { opacity: 0.55; cursor: progress; }
+  .banner { margin: 16px 0 0; padding: 12px 15px; border-left: 3px solid var(--lime);
+            background: var(--surface-0); border-radius: 0 8px 8px 0; font-size: 13.5px; color: var(--text-2); }
+  .banner strong { color: var(--text-1); }
+  .cases { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  .chip {
+    font-size: 13px; padding: 6px 12px; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--border); background: transparent; color: var(--text-2);
+  }
+  .chip:hover { border-color: var(--shap); color: var(--shap); }
+  /* ---- forecast tiles ---- */
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .tile { background: var(--surface-1); padding: 14px 16px; }
+  .tile .k { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-3); margin-bottom: 5px; }
+  .tile .v { font-size: 21px; font-weight: 600; letter-spacing: -0.01em; }
+  .tile .n { font-size: 12px; color: var(--text-3); margin-top: 3px; }
+  .up { color: var(--good); } .down { color: var(--bad); }
+  /* ---- charts ---- */
+  .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  @media (max-width: 860px) { .charts { grid-template-columns: 1fr; } }
+  .chart-title { font-size: 14px; font-weight: 600; margin: 0 0 2px; display: flex; align-items: center; gap: 8px; }
+  .swatch { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+  .chart-note { font-size: 12px; color: var(--text-3); margin: 0 0 10px; }
+  svg { display: block; width: 100%; overflow: visible; }
+  .tick { font-size: 10px; fill: var(--text-3); }
+  .flab { font-size: 11.5px; fill: var(--text-2); }
+  .vlab { font-size: 11px; fill: var(--text-2); }
+  .bar { cursor: default; }
+  .bar:hover { filter: brightness(1.12); }
+  /* ---- verdict rows ---- */
+  .rows { display: grid; gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .row { background: var(--surface-1); display: grid; grid-template-columns: 1fr auto; gap: 16px; padding: 11px 16px; align-items: baseline; }
+  .row .lab { color: var(--text-2); font-size: 14px; }
+  .row .val { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .verdict { margin: 16px 0 0; padding: 13px 16px; border-left: 3px solid var(--shap); background: var(--surface-0); border-radius: 0 8px 8px 0; font-size: 14px; color: var(--text-2); }
+  .verdict strong { color: var(--text-1); }
+  /* ---- table view ---- */
+  details { margin-top: 16px; }
+  summary { cursor: pointer; font-size: 13px; color: var(--text-2); }
+  table { border-collapse: collapse; width: 100%; margin-top: 12px; font-size: 13px; }
+  th, td { text-align: right; padding: 6px 10px; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+  th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; font-variant-numeric: normal; }
+  th { color: var(--text-3); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+  /* ---- misc ---- */
+  #status { color: var(--text-2); font-size: 14px; padding: 8px 0; }
+  .err { color: var(--bad); }
+  #tip {
+    position: fixed; pointer-events: none; opacity: 0; transition: opacity .1s;
+    background: var(--text-1); color: var(--surface-1); font-size: 12.5px; line-height: 1.45;
+    padding: 7px 10px; border-radius: 7px; max-width: 280px; z-index: 9;
+  }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Do SHAP and LIME agree?</h1>
+    <p>Pick one S&amp;P 500 stock, and either a past day whose outcome is already known — so the
+       forecast can be scored — or the next trading session, which has not happened yet. The
+       Random Forest forecasts that stock's next-day return, then TreeSHAP and LIME each explain
+       the same forecast, live from the model rather than from a cached file. The page then tests
+       whether the two explanations agree with each other, whether LIME says the same thing twice,
+       and whether either is faithful to what the model actually uses.</p>
+  </header>
+
+  <div class="card">
+    <div class="controls">
+      <div class="field">
+        <label for="mode">What to forecast</label>
+        <select id="mode">
+          <option value="past">A past day &mdash; outcome known, so it can be scored</option>
+          <option value="live">The next session &mdash; outcome does not exist yet</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="ticker">Stock</label>
+        <select id="ticker"></select>
+      </div>
+      <div class="field" id="date-field">
+        <label for="date">Trading day</label>
+        <select id="date"></select>
+      </div>
+      <button class="primary" id="go">Explain this forecast</button>
+    </div>
+    <p class="banner hidden" id="live-banner"></p>
+    <div class="cases" id="cases"></div>
+    <div id="status"></div>
+  </div>
+
+  <div id="out" class="hidden">
+    <div class="card">
+      <h2>The forecast</h2>
+      <p class="sub" id="fc-sub"></p>
+      <div class="tiles" id="tiles"></div>
+    </div>
+
+    <div class="card">
+      <h2>The two explanations</h2>
+      <p class="sub">Same forecast, same eight features, two methods. A bar to the right pushed the
+         forecast up; to the left, down. Both charts share one scale, so their bar lengths are
+         directly comparable.</p>
+      <div class="charts">
+        <div>
+          <p class="chart-title"><span class="swatch" style="background:var(--shap)"></span>TreeSHAP</p>
+          <p class="chart-note">Exact, deterministic. Contributions sum to the forecast.</p>
+          <svg id="svg-shap" role="img" aria-label="SHAP contributions per feature"></svg>
+        </div>
+        <div>
+          <p class="chart-title"><span class="swatch" style="background:var(--lime)"></span>LIME</p>
+          <p class="chart-note">Approximate. Fits a straight-line model to 5,000 nearby points.</p>
+          <svg id="svg-lime" role="img" aria-label="LIME weights per feature"></svg>
+        </div>
+      </div>
+      <details>
+        <summary>Show all 32 features as a table</summary>
+        <table id="tbl"><thead><tr>
+          <th>Feature</th><th>Family</th><th>Value</th><th>SHAP (bp)</th><th>LIME (bp)</th>
+        </tr></thead><tbody></tbody></table>
+      </details>
+    </div>
+
+    <div class="card">
+      <h2>Do they agree?</h2>
+      <p class="sub">Measured on this one forecast, across all 32 features.</p>
+      <div class="rows" id="agree"></div>
+      <p class="verdict" id="agree-verdict"></p>
+    </div>
+
+    <div class="card">
+      <h2>Is each one stable?</h2>
+      <p class="sub">LIME re-run five times on the identical input. TreeSHAP is deterministic, so
+         re-running it is pointless — it returns the same numbers every time.</p>
+      <div class="rows" id="stab"></div>
+      <p class="verdict" id="stab-verdict"></p>
+    </div>
+
+    <div class="card">
+      <h2>Is the explanation faithful?</h2>
+      <p class="sub">The project's central test. Blank out the feature SHAP called most important
+         and see how far the forecast moves; then do the same to random features. If the
+         explanation is real, the first should move it far more.</p>
+      <div class="rows" id="faith"></div>
+      <p class="verdict" id="faith-verdict"></p>
+    </div>
+  </div>
+</div>
+<div id="tip"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const bp = v => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(2);
+const usd = v => "$" + v.toFixed(2);
+const tip = $("#tip");
+
+function showTip(e, html) {
+  tip.innerHTML = html;
+  tip.style.opacity = 1;
+  const r = tip.getBoundingClientRect();
+  tip.style.left = Math.min(e.clientX + 14, innerWidth - r.width - 10) + "px";
+  tip.style.top = Math.max(e.clientY - r.height - 12, 8) + "px";
+}
+const hideTip = () => tip.style.opacity = 0;
+
+/* A horizontal bar anchored at the zero line, with its far (data) end rounded 4px. */
+function barPath(x0, x1, y, h, r = 4) {
+  const w = Math.abs(x1 - x0);
+  const rr = Math.min(r, w);
+  if (w < 0.6) return `M${x0} ${y}L${x0} ${y + h}`;
+  return x1 >= x0
+    ? `M${x0} ${y}H${x1 - rr}a${rr} ${rr} 0 0 1 ${rr} ${rr}V${y + h - rr}a${rr} ${rr} 0 0 1 ${-rr} ${rr}H${x0}Z`
+    : `M${x0} ${y}H${x1 + rr}a${rr} ${rr} 0 0 0 ${-rr} ${rr}V${y + h - rr}a${rr} ${rr} 0 0 0 ${rr} ${rr}H${x0}Z`;
+}
+
+/* Round a domain up so the ticks read 5 / 10 / 25 rather than 7.2 / 14.4. */
+function niceDomain(v) {
+  const p = Math.pow(10, Math.floor(Math.log10(v)));
+  return p * [1, 2, 2.5, 5, 10].find(m => m * p >= v);
+}
+
+function drawBars(svg, rows, key, colour, domain) {
+  const W = 430, padL = 128, padR = 54, rowH = 30, gap = 2, padT = 6, padB = 26;
+  const H = padT + rows.length * rowH + padB;
+  const x = v => padL + (v - (-domain)) / (2 * domain) * (W - padL - padR);
+  const zero = x(0);
+  const ticks = [-domain, -domain / 2, 0, domain / 2, domain];
+  let s = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMin meet">`;
+  ticks.forEach(t => {
+    s += `<line x1="${x(t).toFixed(1)}" y1="${padT}" x2="${x(t).toFixed(1)}" y2="${H - padB}"
+           stroke="var(${t === 0 ? '--axis' : '--border'})" stroke-width="${t === 0 ? 1.2 : 1}"/>`;
+    const lab = t === 0 ? "0" : (Math.abs(t) >= 10 ? t.toFixed(0) : t.toFixed(1));
+    s += `<text class="tick" x="${x(t).toFixed(1)}" y="${H - padB + 14}" text-anchor="middle">${lab}</text>`;
+  });
+  rows.forEach((r, i) => {
+    const y = padT + i * rowH + gap, h = rowH - 2 * gap, v = r[key], xv = x(v);
+    s += `<path class="bar" d="${barPath(zero, xv, y, h)}" fill="${colour}"
+            data-i="${i}" data-key="${key}"/>`;
+    s += `<text class="flab" x="${padL - 10}" y="${y + h / 2 + 4}" text-anchor="end">${r.name}</text>`;
+    // Outside the bar end by default; if that would collide with the feature names (or run
+    // off the right edge), tuck the label just inside the bar and flip it to the surface colour.
+    const room = 34;
+    const inside = v < 0 ? xv - room < padL : xv + room > W - padR;
+    const outward = v >= 0 ? 1 : -1;                       // away from the zero line
+    const dx = inside ? -6 * outward : 6 * outward;        // tucked in, or just past the end
+    const anchor = (dx > 0) ? "start" : "end";
+    s += `<text class="vlab" x="${(xv + dx).toFixed(1)}" y="${y + h / 2 + 4}" text-anchor="${anchor}"
+            ${inside ? 'fill="var(--surface-1)"' : ''}>${bp(v)}</text>`;
+  });
+  s += `<text class="tick" x="${padL}" y="${H - 2}" text-anchor="start">basis points of forecast return</text></svg>`;
+  svg.outerHTML = s.replace("<svg ", `<svg id="${svg.id}" role="img" `);
+
+  document.querySelectorAll(`#${svg.id} .bar`).forEach(el => {
+    el.addEventListener("mousemove", e => {
+      const r = rows[+el.dataset.i];
+      showTip(e, `<b>${r.name}</b><br>${r.family}<br>value ${r.value.toPrecision(3)}<br>
+                  SHAP ${bp(r.shap_bp)} bp &middot; LIME ${bp(r.lime_bp)} bp`);
+    });
+    el.addEventListener("mouseleave", hideTip);
+  });
+}
+
+function tiles(d) {
+  const predClass = d.pred_ret_bp >= 0 ? "up" : "down";
+  const known = d.actual_ret_bp !== null && d.actual_ret_bp !== undefined;
+  const head = `
+    <div class="tile"><div class="k">${d.live ? "Latest close" : "Close that day"}</div>
+      <div class="v">${usd(d.close)}</div></div>
+    <div class="tile"><div class="k">Forecast return</div>
+      <div class="v ${predClass}">${bp(d.pred_ret_bp)} bp</div>
+      <div class="n">${usd(d.pred_close)} predicted</div></div>`;
+  const tail = known ? `
+    <div class="tile"><div class="k">What happened</div>
+      <div class="v ${d.actual_ret_bp >= 0 ? "up" : "down"}">${bp(d.actual_ret_bp)} bp</div>
+      <div class="n">${usd(d.actual_close)} actual</div></div>
+    <div class="tile"><div class="k">Direction</div>
+      <div class="v ${d.direction_correct ? "up" : "down"}">${d.direction_correct ? "Correct" : "Wrong"}</div>
+      <div class="n">P(up) = ${(100 * d.prob_up).toFixed(1)}%</div></div>
+    <div class="tile"><div class="k">Error</div>
+      <div class="v">${Math.abs(d.actual_ret_bp - d.pred_ret_bp).toFixed(0)} bp</div>
+      <div class="n">forecast vs actual</div></div>` : `
+    <div class="tile"><div class="k">What happened</div>
+      <div class="v" style="color:var(--text-3)">Not yet</div>
+      <div class="n">the session has not traded</div></div>
+    <div class="tile"><div class="k">Scoreable</div>
+      <div class="v" style="color:var(--text-3)">&mdash;</div>
+      <div class="n">come back after the close</div></div>`;
+  $("#tiles").innerHTML = head + tail;
+  $("#fc-sub").textContent = d.live
+    ? `${d.ticker} (${d.sector}) \u2014 forecast for the first session after the close of ${d.date}. `
+      + `Model retrained on ${d.live_meta.n_train_rows.toLocaleString()} stock-days through `
+      + `${d.live_meta.train_through}. Computed in ${d.compute_seconds}s.`
+    : `${d.ticker} (${d.sector}) on ${d.date}. Forecast by the Random Forest retrained in January ${d.year}, `
+      + `using only data up to that day's close. Computed in ${d.compute_seconds}s.`;
+}
+
+function rowsInto(el, items) {
+  el.innerHTML = items.map(([lab, val]) =>
+    `<div class="row"><span class="lab">${lab}</span><span class="val">${val}</span></div>`).join("");
+}
+
+function render(d) {
+  tiles(d);
+  const top = d.features.slice(0, 8);
+  const domain = niceDomain(Math.max(...top.flatMap(r => [Math.abs(r.shap_bp), Math.abs(r.lime_bp)])) * 1.1);
+  drawBars($("#svg-shap"), top, "shap_bp", "var(--shap)", domain);
+  drawBars($("#svg-lime"), top, "lime_bp", "var(--lime)", domain);
+
+  $("#tbl").querySelector("tbody").innerHTML = d.features.map(r =>
+    `<tr><td>${r.name}</td><td>${r.family}</td><td>${r.value.toPrecision(3)}</td>
+     <td>${bp(r.shap_bp)}</td><td>${bp(r.lime_bp)}</td></tr>`).join("");
+
+  const a = d.agreement;
+  rowsInto($("#agree"), [
+    ["Rank correlation across all 32 features (Spearman &rho;)", a.spearman.toFixed(3)],
+    ["Of each method's top 5 features, how many are shared", (a.top5_overlap * 5) + " of 5"],
+    ["Same single most important feature?", a.same_top ? "Yes" : "No"],
+    ["SHAP's top feature", a.shap_top],
+    ["LIME's top feature", a.lime_top],
+    ["Agreement on the direction of SHAP's top 5", (100 * a.sign_agreement).toFixed(0) + "%"],
+  ]);
+  $("#agree-verdict").innerHTML = a.same_top
+    ? `Both methods name <strong>${a.shap_top}</strong> as the main driver, and their rankings
+       correlate at &rho; = ${a.spearman.toFixed(2)}. On this forecast they tell the same story —
+       though across the 804 stock-days in the full study they agree globally (&tau; 0.73) far more
+       often than they agree case by case.`
+    : `The two methods disagree on what mattered most: SHAP says <strong>${a.shap_top}</strong>,
+       LIME says <strong>${a.lime_top}</strong>. If you had run only one of them, you would have
+       reported a different driver — which is exactly the risk this project measures.`;
+
+  const s = d.lime_stability;
+  rowsInto($("#stab"), [
+    [`LIME vs LIME, averaged over all pairs of ${s.n_seeds} runs (Spearman &rho;)`, s.spearman_between_runs.toFixed(3)],
+    [`Top-5 features shared between LIME runs`, (s.top5_overlap_between_runs * 5).toFixed(1) + " of 5"],
+    ["Did every LIME run pick the same top feature?", s.same_top_every_run ? "Yes" : "No"],
+    ["Top feature per run", (() => {
+      const c = {}; s.per_seed_top.forEach(f => c[f] = (c[f] || 0) + 1);
+      return Object.entries(c).sort((a, b) => b[1] - a[1])
+        .map(([f, n]) => `${f} (${n}\u00d7)`).join(", ");
+    })()],
+    ["How well LIME's straight-line model fits (R&sup2;)", s.surrogate_r2_median.toFixed(3)],
+    ["TreeSHAP vs TreeSHAP", "1.000 (deterministic)"],
+  ]);
+  $("#stab-verdict").innerHTML = s.same_top_every_run
+    ? `LIME was stable here — all ${s.n_seeds} runs agreed on the top feature, &rho; =
+       ${s.spearman_between_runs.toFixed(2)} between runs. Across the full study the median was
+       &rho; 0.48, so steady results on one case are not a guarantee.`
+    : `LIME gave a <strong>different answer each time it was run on identical input</strong>
+       (&rho; = ${s.spearman_between_runs.toFixed(2)} between runs). A single LIME explanation
+       reported as a finding would be reporting noise.`;
+
+  const f = d.faithfulness;
+  rowsInto($("#faith"), [
+    [`Blanking out SHAP's top feature (${f.top_feature})`, f.top_change_bp.toFixed(2) + " bp"],
+    [`Blanking out a random feature (averaged over ${f.n_random_probes})`, f.random_change_bp.toFixed(2) + " bp"],
+    ["Ratio", f.ratio ? f.ratio.toFixed(1) + "×" : "—"],
+  ]);
+  $("#faith-verdict").innerHTML = (f.ratio && f.ratio >= 2)
+    ? `Removing what SHAP called most important moved this forecast <strong>${f.ratio.toFixed(1)}&times;
+       further</strong> than removing something random. The explanation is pointing at a feature the
+       model genuinely uses. Across 2,000 stock-days the project measured 13.3&times;.`
+    : `On this forecast the gap is small (${f.ratio ? f.ratio.toFixed(1) + "×" : "n/a"}).
+       Faithfulness is a property of the method on average — the project's figure across 2,000
+       stock-days is 13.3&times; — so single cases vary.`;
+
+  $("#out").classList.remove("hidden");
+}
+
+async function loadDates(ticker) {
+  const dates = await (await fetch("/api/dates?ticker=" + ticker)).json();
+  const sel = $("#date"), keep = sel.value;
+  sel.innerHTML = dates.map(d => `<option>${d}</option>`).join("");
+  if (dates.includes(keep)) sel.value = keep;
+  return dates;
+}
+
+async function run() {
+  const btn = $("#go");
+  btn.disabled = true;
+  $("#status").innerHTML = "Running the model, TreeSHAP, and 5 LIME runs …";
+  try {
+    const live = $("#mode").value === "live";
+    const q = live ? `ticker=${$("#ticker").value}&live=1`
+                   : `ticker=${$("#ticker").value}&date=${$("#date").value}`;
+    const d = await (await fetch("/api/explain?" + q)).json();
+    if (d.error) { $("#status").innerHTML = `<span class="err">${d.error}</span>`; return; }
+    $("#status").textContent = "";
+    render(d);
+  } catch (e) {
+    $("#status").innerHTML = `<span class="err">${e}</span>`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+let META = null;
+
+function applyMode() {
+  const live = $("#mode").value === "live";
+  $("#date-field").classList.toggle("hidden", live);
+  $("#cases").classList.toggle("hidden", live);
+  $("#live-banner").classList.toggle("hidden", !live);
+  const keep = $("#ticker").value;
+  const list = live ? META.live_tickers : META.tickers;
+  $("#ticker").innerHTML = list.map(t => `<option>${t}</option>`).join("");
+  $("#ticker").value = list.includes(keep) ? keep : list[0];
+}
+
+(async function init() {
+  META = await (await fetch("/api/meta")).json();
+  $("#cases").innerHTML = META.cases.map(c =>
+    `<button class="chip" data-t="${c.ticker}" data-d="${c.date}">${c.label}</button>`).join("");
+
+  if (META.live) {
+    const m = META.live;
+    $("#live-banner").innerHTML =
+      `<strong>This is a real forecast of a day that has not happened.</strong> Prices were
+       downloaded from Yahoo Finance on ${m.generated_at.slice(0, 10)}; the model was retrained on
+       ${m.n_train_rows.toLocaleString()} stock-days through ${m.train_through} and is forecasting
+       the first session after the close of ${m.as_of_close}. ${m.n_stocks} of the original 474
+       stocks are still trading &mdash; the other ${m.tickers_no_longer_trading.length} were
+       acquired, merged or delisted, which is survivorship bias you can see rather than read about.`;
+  } else {
+    $("#mode").querySelector('option[value="live"]').disabled = true;
+    $("#mode").querySelector('option[value="live"]').textContent =
+      "The next session \u2014 run src/live.py to enable";
+  }
+
+  applyMode();
+  $("#ticker").value = META.cases[0].ticker;
+  await loadDates(META.cases[0].ticker);
+  $("#date").value = META.cases[0].date;
+
+  $("#mode").addEventListener("change", () => { applyMode(); run(); });
+  $("#ticker").addEventListener("change", () => {
+    if ($("#mode").value === "past") loadDates($("#ticker").value);
+  });
+  $("#go").addEventListener("click", run);
+  $("#cases").addEventListener("click", async e => {
+    const b = e.target.closest(".chip"); if (!b) return;
+    $("#ticker").value = b.dataset.t;
+    await loadDates(b.dataset.t);
+    $("#date").value = b.dataset.d;
+    run();
+  });
+  run();
+})();
+</script>
+</body>
+</html>

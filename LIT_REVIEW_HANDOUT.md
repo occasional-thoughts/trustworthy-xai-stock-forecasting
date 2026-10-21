@@ -274,7 +274,7 @@ For one forecast:
 | **Seed stability** | Kendall τ 0.85 (SHAP is stable) |
 | **Retraining stability** | τ 0.44–0.77; weakest after COVID entered the training data |
 | **Explainer agreement** | SHAP vs tree importance τ 0.69, but SHAP vs permutation only **τ 0.03** — only 4 of 32 features measurably improve accuracy |
-| **SHAP vs LIME** | Agree globally (τ 0.73), but on a single forecast LIME is unstable between runs (ρ 0.48) and fits poorly (median R² 0.17) |
+| **SHAP vs LIME** | Agree only moderately even globally (τ 0.58), and on a single forecast LIME is unstable between runs (ρ 0.45) and fits poorly (median R² 0.17) |
 | **Regime drift** | Significant (p = 0.003): volatility's share rises from 5.1% pre-COVID to 9.2% in the 2022 bear market |
 | **Sector drift** | Significant (p = 0.001) |
 | **Sanity check** | A no-signal model gives explanations 8× weaker and unrelated (τ 0.13) |

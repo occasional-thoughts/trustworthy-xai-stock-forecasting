@@ -324,6 +324,14 @@ to $3,000, and avoids a tree's inability to predict beyond the price range seen 
   proximity, and fits a linear surrogate model whose weights form the explanation.
 * **Settings:** default quartile discretisation; 5,000 training rows as the reference
   distribution.
+* **Seeding.** A fresh `LimeTabularExplainer` is constructed for every explanation, with the
+  seed that explanation will use. This matters: the class binds its `RandomState` into the
+  discretiser and the surrogate solver at construction, so reassigning `.random_state` on a
+  reused explainer controls only part of the sampling, and the same seed then returns a
+  different explanation on every call (measured here: Spearman 0.46–0.53 between repeats that
+  should have been identical). Building the explainer per seed costs 18 ms and makes each run
+  exactly reproducible, so the run-to-run figures below measure LIME's own sampling
+  variability rather than leaked state.
 * **Sample:** **804 stock-days** (200 per test year plus the local cases), each explained
   with **5 different random seeds**.
 
@@ -593,11 +601,12 @@ Figures: `regime_family_shares.png`, `sector_family_shares.png`.
 
 | | LIME | Permutation | MDI |
 |---|---|---|---|
-| **TreeSHAP** | **0.73** (4/5) | **0.03** (3/5) | 0.69 (4/5) |
-| **LIME** | – | 0.07 (3/5) | 0.69 (4/5) |
+| **TreeSHAP** | **0.58** (4/5) | **0.03** (3/5) | 0.69 (4/5) |
+| **LIME** | – | 0.18 (3/5) | 0.65 (4/5) |
 | **Permutation** | – | – | 0.15 (4/5) |
 
-* **Globally, SHAP and LIME agree well** (τ = 0.73), and both agree with MDI.
+* **Globally, SHAP and LIME agree moderately** (τ = 0.58, sharing 4 of their top 5 features),
+  and both agree with MDI more closely than with each other.
 * **All three disagree with permutation importance** (τ ≤ 0.15). Only 4 of 32 features
   measurably improve accuracy (permutation importance > 2 SD): market volatility, sector
   5-day return, Bollinger width and volume trend; 15 have negative permutation importance.
@@ -607,22 +616,22 @@ Figures: `regime_family_shares.png`, `sector_family_shares.png`.
 
 | Measure | TreeSHAP | LIME |
 |---|---|---|
-| Agreement with the other method: median Spearman ρ | – | **0.45** |
-| Agreement: top-5 feature overlap | – | 66% |
+| Agreement with the other method: median Spearman ρ | – | **0.44** |
+| Agreement: top-5 feature overlap | – | 65% |
 | Agreement: same top feature | – | 59% |
 | Agreement: sign matches SHAP on SHAP's top-5 features | – | 81% |
-| Run-to-run stability: median ρ between runs | **1.00** (deterministic) | **0.48** |
-| Run-to-run stability: top-5 overlap between runs | 1.00 | 80% |
-| Run-to-run stability: same top feature in all 5 runs | 100% | 92% |
+| Run-to-run stability: median ρ between runs | **1.00** (deterministic) | **0.45** |
+| Run-to-run stability: top-5 overlap between runs | 1.00 | 79% |
+| Run-to-run stability: same top feature in all 5 runs | 100% | 96% |
 | Local fit (surrogate R²) | exact (additive) | **median 0.17**; 67% of explanations below 0.3 |
-| Faithfulness AOPC (bp; random order = 3.71) | **8.70** | 8.15 |
-| Faithfulness: \|Δ forecast\| after removing top-1 feature (random = 0.56 bp) | **8.89** | 6.50 |
+| Faithfulness AOPC (bp; random order = 3.71) | **8.70** | 8.13 |
+| Faithfulness: \|Δ forecast\| after removing top-1 feature (random = 0.56 bp) | **8.89** | 6.53 |
 | Time per explanation | ~0.001 s | ~0.08 s |
 
 **What this shows.**
 * **LIME is less reliable than SHAP for individual forecasts:**
   * explaining the *same* forecast twice with different seeds gives a feature ranking that
-    correlates only 0.48;
+    correlates only 0.45;
   * LIME's linear surrogate explains a median of just **17%** of the model's local
     behaviour;
   * on a typical forecast, LIME and SHAP share only 3 of their top 5 features.
@@ -663,8 +672,9 @@ Figures: `lime_vs_shap_local.png`, `lime_reliability.png`, `explainer_agreement.
      actually predict prices. Presenting SHAP or LIME rankings as market insight, as in
      papers 1 and 3, conflates the two.
 3. **For tree models, SHAP should be preferred over LIME for individual explanations.**
-   * LIME agrees with SHAP globally (τ 0.73) but is unstable for individual forecasts (ρ
-     0.48 between runs), fits poorly (median R² 0.17), and can flip a feature's sign.
+   * LIME agrees with SHAP only moderately even globally (τ 0.58) and is unstable for
+     individual forecasts (ρ 0.45 between runs), fits poorly (median R² 0.17), and can flip a
+     feature's sign.
    * Studies reporting a single LIME explanation per case (paper 3) risk reporting noise.
      Like Song et al. (2026) for neural networks, this shows explanations must be
      re-run before they are trusted.
@@ -716,8 +726,9 @@ Figures: `lime_vs_shap_local.png`, `lime_reliability.png`, `explainer_agreement.
   * clearly different from a no-signal model;
   * mostly about market-wide timing;
   * significantly different across market regimes and sectors, and after retraining.
-* **LIME explanations** agree with SHAP globally, but are unstable between runs, fit the
-  model poorly, and can contradict SHAP on individual forecasts.
+* **LIME explanations** agree with SHAP only moderately even globally (τ 0.58), are unstable
+  between runs (ρ 0.45), fit the model poorly (median R² 0.17), and name a different top
+  feature on 41% of forecasts.
 * **Neither** SHAP nor LIME identifies the features that actually improve accuracy.
 * **Recommendations for stock-forecasting studies:**
   1. benchmark accuracy against persistence;

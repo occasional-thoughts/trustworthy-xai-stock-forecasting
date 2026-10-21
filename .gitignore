@@ -17,3 +17,8 @@ logs/
 papers/*.pdf
 
 .DS_Store
+
+# Live-forecast artefacts (regenerate with src/live.py; prices are re-downloaded)
+data/live_panel.pkl
+data/live_features.pkl
+results/live_forecast.pkl

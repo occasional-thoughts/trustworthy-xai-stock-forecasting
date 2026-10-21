@@ -40,9 +40,21 @@ LOCAL_CASES = [("AAPL", "2020-03-16"), ("AAPL", "2019-06-03"), ("XOM", "2020-03-
 rng = np.random.default_rng(SEED)
 
 
-def lime_weights(explainer, x, predict, seed):
+def make_explainer(reference, seed):
+    """A fresh explainer per explanation, built with the seed it will use.
+
+    LimeTabularExplainer binds its RandomState into the discretizer and the surrogate solver
+    at construction time, so reassigning `.random_state` afterwards controls only part of the
+    sampling: the same seed on a reused explainer still returns a different explanation every
+    call (measured: Spearman 0.46-0.53 between repeats). Constructing it per seed is the only
+    way to make a run reproducible, and it costs 18 ms."""
+    return LimeTabularExplainer(reference, mode="regression", feature_names=FEATURES,
+                                random_state=seed)
+
+
+def lime_weights(reference, x, predict, seed):
     """One LIME explanation -> (weight per feature in FEATURES order, local surrogate R^2)."""
-    explainer.random_state = np.random.RandomState(seed)
+    explainer = make_explainer(reference, seed)
     exp = explainer.explain_instance(x, predict, num_features=len(FEATURES), num_samples=N_SAMPLES)
     w = np.zeros(len(FEATURES))
     # In regression mode lime stores the weights under label 1 and a sign-flipped copy under
@@ -92,13 +104,12 @@ def main():
         model = joblib.load(MODELS / f"rf_reg_{year}.joblib")
         model.set_params(n_jobs=1)          # LIME calls predict on 5,000 small batches; threads only add overhead
         train = df[(df.date >= TRAIN_START) & (df.date < f"{year}-01-01")]
-        explainer = LimeTabularExplainer(train[FEATURES].sample(N_LIME_TRAIN, random_state=SEED).values,
-                                         mode="regression", feature_names=FEATURES, random_state=SEED)
+        reference = train[FEATURES].sample(N_LIME_TRAIN, random_state=SEED).values
         idx = [i for i, r in enumerate(rows) if meta.year[r] == year]
         for i in idx:
             x = X_all[rows[i]]
             for s in range(N_SEEDS):
-                W[i, s], R2[i, s], lst = lime_weights(explainer, x, model.predict, seed=SEED + s)
+                W[i, s], R2[i, s], lst = lime_weights(reference, x, model.predict, seed=SEED + s)
                 if s == 0 and rows[i] in case_rows.values():
                     lime_lists[rows[i]] = lst
         model.set_params(n_jobs=-1)

@@ -334,7 +334,7 @@ function numberBadge(slide, x, y, n, colour) {
   const cells = [
     ["Accuracy", "R² 0.0001", "on the next-day return — no better than predicting no change (p = 0.97), though it reads as 98.44% in price units", NAVY],
     ["Faithful", "13×", "top-SHAP features move forecasts 13× more than random ones", AMBER],
-    ["Stable", "τ 0.85", "SHAP agrees across random seeds; LIME only ρ 0.48 between runs", NAVY],
+    ["Stable", "τ 0.85", "SHAP agrees across random seeds; LIME only ρ 0.45 between its own re-runs", NAVY],
     ["Agreement", "τ 0.03", "SHAP vs accuracy-based importance: only 4 of 32 features help accuracy", AMBER],
     ["Meaningful", "τ 0.13", "explanations differ sharply from a no-signal model — they pass", NAVY],
     ["Consistent", "p = 0.003", "explanations change significantly across market regimes", AMBER],

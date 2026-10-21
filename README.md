@@ -26,6 +26,8 @@ level and +0.00013 on the return**. Only the second number says anything about t
 | 8. Figures | `src/plots.py` | `results/figures/*.png` |
 | 9. Markdown → Word | `src/make_docx.py [file.md]` | `REPORT.docx`, `OBJECTIVE_MODEL_REQUIREMENTS.docx` |
 | 10. Slide deck | `src/make_slides.js` | `LIT_REVIEW_SLIDES.pptx` (needs `pptxgenjs`) |
+| 11. Next-session forecast | `src/live.py` | `results/live_forecast.pkl`, `models/rf_reg_live.joblib` |
+| 12. Interactive demo | `src/app.py` | a local page at `http://127.0.0.1:8000` |
 
 ## Setup and run
 
@@ -48,6 +50,53 @@ cd src
 
 On an Apple M3 Pro the whole pipeline takes about 25 minutes (training about 10, tuning
 about 5, explanations about 7).
+
+## Interactive demo
+
+```bash
+.venv/bin/python src/app.py
+```
+
+Opens a local page where you pick one stock and one trading day. It then runs the saved model
+for that stock-day and shows:
+
+* the forecast next-day return, the price it implies, and what actually happened;
+* the TreeSHAP and LIME explanations of that same forecast, side by side on one scale;
+* whether the two explanations agree (rank correlation, shared top-5, same top feature,
+  sign agreement);
+* whether LIME says the same thing twice, by re-running it five times on identical input;
+* whether the explanation is faithful, by blanking out the feature SHAP ranked first and
+  comparing the effect against blanking out random features.
+
+Everything is computed live from `models/*.joblib` — about 0.7 s per stock-day — so the page
+shows what the pipeline produces rather than a cached result. Requires `data/features.pkl` and
+`models/`, both of which are rebuilt by steps 1–4 above.
+
+Five preset cases are offered, including `BAC 2019-02-28`, where SHAP and LIME name different
+top features. On 28 randomly sampled stock-days they disagreed on the top feature on 11.
+
+### Forecasting a day that has not happened
+
+The walk-forward test scores days whose outcome is already known, because that is the only way
+to measure accuracy. `src/live.py` does the other half:
+
+```bash
+.venv/bin/python src/live.py          # ~2 min: download, retrain, forecast
+```
+
+It downloads the universe from Yahoo Finance, rebuilds the same 32 features, retrains with the
+same hyperparameters on everything up to the most recent close, and forecasts the next session.
+The demo page then offers it as a second mode, where "what happened" is honestly blank.
+
+Three things to state when showing it:
+
+* **431 of the original 474 stocks still trade.** The other 43 were acquired, merged or
+  delisted — survivorship bias made visible rather than described.
+* **Prices come from Yahoo Finance**, not the benchmark panel used for the study. Both are
+  split- and dividend-adjusted, but they are different vendors.
+* **Nothing here is scored, and the backtest says not to expect much.** Across 405,545 scored
+  forecasts the model's return R² was +0.00013, so a single live forecast is a demonstration of
+  the mechanism, not evidence about tomorrow.
 
 ## Data
 
@@ -124,7 +173,7 @@ Test set: 405,545 stock-days, Jan 2019 – May 2022. Details in [REPORT.md](REPO
 | **Explainer agreement** | SHAP vs MDI τ 0.69; SHAP vs permutation τ 0.03 (only 4 of 32 features improve accuracy) |
 | **Regime drift** | Significant, p = 0.003 (volatility share 5% in 2019 → 9% in 2022 bear) |
 | **Sector drift** | Significant, p = 0.001 |
-| **LIME vs SHAP** | Globally agree (τ 0.73); per forecast LIME is unstable across runs (ρ 0.48), fits poorly (median R² 0.17), matches SHAP's top-5 only 66% |
+| **LIME vs SHAP** | Agree only moderately even globally (τ 0.58); per forecast LIME is unstable across runs (ρ 0.45), fits poorly (median R² 0.17), and names a different top feature 41% of the time |
 | **Sanity check** | No-signal model: τ 0.13, 8× weaker explanations. Market-timing-only model: τ 0.56. Explanations are mostly about market-wide timing |
 
 ## Figures (`results/figures/`)
