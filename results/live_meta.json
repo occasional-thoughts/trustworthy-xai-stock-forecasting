@@ -1,10 +1,10 @@
 {
-  "as_of_close": "2026-10-20",
+  "as_of_close": "2026-10-29",
   "forecast_for": "the next trading session after that close",
-  "generated_at": "2026-10-21T11:39:40",
+  "generated_at": "2026-10-30T09:29:53",
   "n_stocks": 431,
-  "n_train_rows": 1470270,
-  "train_through": "2026-10-19",
+  "n_train_rows": 1473486,
+  "train_through": "2026-10-28",
   "tickers_no_longer_trading": [
     "ABC",
     "ABMD",

@@ -89,6 +89,10 @@
   .chart-title { font-size: 14px; font-weight: 600; margin: 0 0 2px; display: flex; align-items: center; gap: 8px; }
   .swatch { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
   .chart-note { font-size: 12px; color: var(--text-3); margin: 0 0 10px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 18px; margin: 0 0 6px; font-size: 12.5px; color: var(--text-2); }
+  .legend span.key { display: inline-flex; align-items: center; gap: 7px; }
+  .legend i { width: 13px; height: 13px; border-radius: 3px; display: inline-block; }
+  .legend i.line { height: 2px; border-radius: 1px; width: 18px; }
   svg { display: block; width: 100%; overflow: visible; }
   .tick { font-size: 10px; fill: var(--text-3); }
   .flab { font-size: 11.5px; fill: var(--text-2); }
@@ -163,6 +167,13 @@
       <div class="tiles" id="tiles"></div>
     </div>
 
+    <div class="card" id="path-card">
+      <h2>The forecast in context</h2>
+      <p class="sub" id="path-sub"></p>
+      <p class="legend" id="path-legend"></p>
+      <svg id="svg-path" role="img" aria-label="Recent closing prices and the next-day forecast"></svg>
+    </div>
+
     <div class="card">
       <h2>The two explanations</h2>
       <p class="sub">Same forecast, same eight features, two methods. A bar to the right pushed the
@@ -180,6 +191,12 @@
           <svg id="svg-lime" role="img" aria-label="LIME weights per feature"></svg>
         </div>
       </div>
+      <p class="chart-title" style="margin-top:26px"><span class="swatch" style="background:var(--shap)"></span>How TreeSHAP builds the forecast</p>
+      <p class="chart-note">Start at the average forecast, add each feature's contribution, arrive at this
+         forecast. The contributions sum to it exactly &mdash; that is what makes SHAP exact rather than
+         approximate.</p>
+      <svg id="svg-waterfall" role="img" aria-label="SHAP waterfall from base value to forecast"></svg>
+
       <details>
         <summary>Show all 32 features as a table</summary>
         <table id="tbl"><thead><tr>
@@ -287,6 +304,131 @@ function drawBars(svg, rows, key, colour, domain) {
   });
 }
 
+/* ---- the forecast against the stock's recent path and its usual daily range ---- */
+function drawPath(svg, d) {
+  const hist = d.history || [];
+  if (hist.length < 5) { $("#path-card").classList.add("hidden"); return; }
+  $("#path-card").classList.remove("hidden");
+
+  const W = 900, H = 270, padL = 58, padR = 118, padT = 14, padB = 34;
+  const n = hist.length, last = hist[n - 1].close;
+  const tm = d.typical_move_bp || 0, band = last * tm / 1e4;
+  const vals = hist.map(h => h.close).concat([d.pred_close, last + band, last - band]);
+  if (d.actual_close != null) vals.push(d.actual_close);
+  const lo = Math.min(...vals), hi = Math.max(...vals), pad = (hi - lo) * 0.14 || 1;
+  const y0 = lo - pad, y1 = hi + pad;
+  const x = i => padL + i / n * (W - padL - padR);
+  const y = v => padT + (y1 - v) / (y1 - y0) * (H - padT - padB);
+
+  let g = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMin meet">`;
+  // y grid
+  for (let k = 0; k <= 3; k++) {
+    const v = y0 + (y1 - y0) * k / 3;
+    g += `<line x1="${padL}" y1="${y(v).toFixed(1)}" x2="${W - padR}" y2="${y(v).toFixed(1)}"
+            stroke="var(--border)" stroke-width="1"/>
+          <text class="tick" x="${padL - 8}" y="${(y(v) + 3.5).toFixed(1)}" text-anchor="end">$${v.toFixed(0)}</text>`;
+  }
+  // the band a normal day's move would cover, drawn around the last close
+  g += `<rect x="${x(Math.max(n - 6, 0)).toFixed(1)}" y="${y(last + band).toFixed(1)}"
+          width="${(W - padR - x(Math.max(n - 6, 0))).toFixed(1)}"
+          height="${Math.max(y(last - band) - y(last + band), 1).toFixed(1)}"
+          fill="var(--axis)" opacity="0.2"/>`;
+
+
+  // price history
+  g += `<path d="${hist.map((h, i) => `${i ? "L" : "M"}${x(i).toFixed(1)} ${y(h.close).toFixed(1)}`).join("")}"
+          fill="none" stroke="var(--text-2)" stroke-width="2" stroke-linejoin="round"/>`;
+  // last close -> forecast
+  g += `<line x1="${x(n - 1).toFixed(1)}" y1="${y(last).toFixed(1)}" x2="${x(n).toFixed(1)}"
+          y2="${y(d.pred_close).toFixed(1)}" stroke="var(--shap)" stroke-width="2" stroke-dasharray="4 3"/>`;
+  g += `<circle cx="${x(n).toFixed(1)}" cy="${y(d.pred_close).toFixed(1)}" r="5.5" fill="var(--shap)"
+          stroke="var(--surface-1)" stroke-width="2"/>`;
+  g += `<text class="vlab" x="${(x(n) + 10).toFixed(1)}" y="${(y(d.pred_close) + 4).toFixed(1)}"
+          fill="var(--shap)" text-anchor="start">forecast $${d.pred_close.toFixed(2)}</text>`;
+  if (d.actual_close != null) {
+    const yf = y(d.pred_close), ya = y(d.actual_close);
+    const dy = Math.abs(ya - yf) < 15 ? (ya >= yf ? 12 : -12) : 0;   // keep the two labels apart
+    g += `<circle cx="${x(n).toFixed(1)}" cy="${ya.toFixed(1)}" r="5.5" fill="var(--lime)"
+            stroke="var(--surface-1)" stroke-width="2"/>`;
+    g += `<text class="vlab" x="${(x(n) + 10).toFixed(1)}" y="${(ya + 4 + dy).toFixed(1)}"
+            fill="var(--lime)" text-anchor="start">actual $${d.actual_close.toFixed(2)}</text>`;
+  }
+  // x labels: first, middle, last, and the forecast step
+  [[0, hist[0].date], [Math.floor(n / 3), hist[Math.floor(n / 3)].date],
+   [Math.floor(2 * n / 3), hist[Math.floor(2 * n / 3)].date]].forEach(([i, lab]) => {
+    g += `<text class="tick" x="${x(i).toFixed(1)}" y="${H - 12}" text-anchor="middle">${lab.slice(5)}</text>`;
+  });
+  g += `<text class="tick" x="${x(n).toFixed(1)}" y="${H - 12}" text-anchor="middle"
+          fill="var(--shap)">next</text>`;
+  g += `</svg>`;
+  svg.outerHTML = g.replace("<svg ", `<svg id="${svg.id}" role="img" `);
+
+  $("#path-legend").innerHTML =
+    `<span class="key"><i class="line" style="background:var(--text-2)"></i>closing price</span>
+     <span class="key"><i style="background:var(--shap)"></i>forecast</span>` +
+    (d.actual_close != null ? `<span class="key"><i style="background:var(--lime)"></i>what happened</span>` : "") +
+    `<span class="key"><i style="background:var(--axis);opacity:.45"></i>normal daily range
+      (&plusmn;${tm.toFixed(0)} bp)</span>`;
+  const move = Math.abs(d.pred_ret_bp);
+  $("#path-sub").innerHTML =
+    `The last ${n} closes, then the forecast. The shaded band is one standard deviation of this stock's
+     recent daily moves &mdash; <strong>&plusmn;${tm.toFixed(0)} bp</strong>. The forecast moves
+     <strong>${move.toFixed(1)} bp</strong>, about ${(tm / Math.max(move, 0.1)).toFixed(0)}&times; smaller,
+     which is why it sits almost on top of the last close.`;
+}
+
+/* ---- base value + contributions = forecast ---- */
+function drawWaterfall(svg, d) {
+  const top = d.features.slice(0, 8);
+  const shown = top.reduce((a, r) => a + r.shap_bp, 0);
+  const rest = d.pred_ret_bp - d.base_value_bp - shown;
+  const steps = top.map(r => ({ name: r.name, v: r.shap_bp }))
+    .concat([{ name: `the other ${d.features.length - 8} features`, v: rest }]);
+
+  const W = 900, padL = 210, padR = 96, rowH = 30, gap = 3, padT = 26, padB = 30;
+  const H = padT + (steps.length + 2) * rowH + padB;
+  let cum = d.base_value_bp;
+  const marks = steps.map(st => { const from = cum; cum += st.v; return { ...st, from, to: cum }; });
+  const all = [d.base_value_bp, d.pred_ret_bp].concat(marks.flatMap(m => [m.from, m.to]));
+  const lo = Math.min(...all), hi = Math.max(...all), pad = (hi - lo) * 0.18 || 1;
+  const x = v => padL + (v - (lo - pad)) / ((hi + pad) - (lo - pad)) * (W - padL - padR);
+
+  let g = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMin meet">`;
+  const rowY = i => padT + i * rowH + gap, barH = rowH - 2 * gap;
+  const label = (i, text, bold) =>
+    `<text class="flab" x="${padL - 12}" y="${rowY(i) + barH / 2 + 4}" text-anchor="end"
+       ${bold ? 'font-weight="600" fill="var(--text-1)"' : ''}>${text}</text>`;
+  const value = (i, xv, v, colour, anchorRight) =>
+    `<text class="vlab" x="${(xv + (anchorRight ? -7 : 7)).toFixed(1)}" y="${rowY(i) + barH / 2 + 4}"
+       text-anchor="${anchorRight ? "end" : "start"}" ${colour ? `fill="${colour}"` : ""}>${v}</text>`;
+
+  // start: the average forecast across all stock-days
+  g += `<line x1="${x(d.base_value_bp).toFixed(1)}" y1="${padT}" x2="${x(d.base_value_bp).toFixed(1)}"
+          y2="${H - padB}" stroke="var(--axis)" stroke-width="1" stroke-dasharray="3 3"/>`;
+  g += label(0, "average forecast", true)
+     + `<circle cx="${x(d.base_value_bp).toFixed(1)}" cy="${rowY(0) + barH / 2}" r="5" fill="var(--text-2)"/>`
+     + value(0, x(d.base_value_bp), bp(d.base_value_bp) + " bp", "var(--text-2)", false);
+
+  marks.forEach((m, k) => {
+    const i = k + 1, up = m.v >= 0;
+    const xa = x(m.from), xb = x(m.to);
+    g += `<path class="bar" d="${barPath(xa, xb, rowY(i), barH)}" fill="${up ? "var(--shap)" : "var(--bad)"}"/>`;
+    g += `<line x1="${xb.toFixed(1)}" y1="${rowY(i)}" x2="${xb.toFixed(1)}" y2="${rowY(i) + rowH}"
+            stroke="var(--border)" stroke-width="1"/>`;
+    g += label(i, m.name) + value(i, Math.max(xa, xb), bp(m.v), up ? "var(--shap)" : "var(--bad)", false);
+  });
+
+  const i = steps.length + 1;
+  g += `<line x1="${x(d.pred_ret_bp).toFixed(1)}" y1="${padT}" x2="${x(d.pred_ret_bp).toFixed(1)}"
+          y2="${H - padB}" stroke="var(--shap)" stroke-width="1.4"/>`;
+  g += label(i, "this forecast", true)
+     + `<circle cx="${x(d.pred_ret_bp).toFixed(1)}" cy="${rowY(i) + barH / 2}" r="5.5" fill="var(--shap)"/>`
+     + value(i, x(d.pred_ret_bp), bp(d.pred_ret_bp) + " bp", "var(--shap)", false);
+  g += `<text class="tick" x="${padL}" y="${H - 8}" text-anchor="start">basis points of next-day return</text>`;
+  g += `</svg>`;
+  svg.outerHTML = g.replace("<svg ", `<svg id="${svg.id}" role="img" `);
+}
+
 function tiles(d) {
   const predClass = d.pred_ret_bp >= 0 ? "up" : "down";
   const known = d.actual_ret_bp !== null && d.actual_ret_bp !== undefined;
@@ -330,6 +472,8 @@ function render(d) {
   tiles(d);
   const top = d.features.slice(0, 8);
   const domain = niceDomain(Math.max(...top.flatMap(r => [Math.abs(r.shap_bp), Math.abs(r.lime_bp)])) * 1.1);
+  drawPath($("#svg-path"), d);
+  drawWaterfall($("#svg-waterfall"), d);
   drawBars($("#svg-shap"), top, "shap_bp", "var(--shap)", domain);
   drawBars($("#svg-lime"), top, "lime_bp", "var(--lime)", domain);
 
@@ -440,7 +584,13 @@ function applyMode() {
 
   if (META.live) {
     const m = META.live;
-    $("#live-banner").innerHTML =
+    const stale = m.days_old > 3;
+    $("#live-banner").style.borderLeftColor = stale ? "var(--bad)" : "var(--lime)";
+    $("#live-banner").innerHTML = (stale
+      ? `<strong style="color:var(--bad)">This forecast is ${m.days_old} days old &mdash; the session
+         it predicts has already traded.</strong> Re-run <code>python src/live.py</code> to refresh it,
+         then reload this page.<br><br>`
+      : "") +
       `<strong>This is a real forecast of a day that has not happened.</strong> Prices were
        downloaded from Yahoo Finance on ${m.generated_at.slice(0, 10)}; the model was retrained on
        ${m.n_train_rows.toLocaleString()} stock-days through ${m.train_through} and is forecasting

@@ -25,7 +25,7 @@ import pandas as pd
 import shap
 from scipy import stats
 
-from config import DATA, FEATURE_FILE, MODELS, RESULTS, SEED, TEST_YEARS, TRAIN_START
+from config import DATA, FEATURE_FILE, MODELS, PANEL_FILE, RESULTS, SEED, TEST_YEARS, TRAIN_START
 from features import FAMILY_OF, FEATURES
 from lime_explain import lime_weights
 
@@ -35,6 +35,7 @@ N_LIME_TRAIN = 5000       # reference rows LIME samples around, as in lime_expla
 N_LIME_SEEDS = 5          # re-runs, to show LIME's run-to-run instability
 N_BACKGROUND = 32         # replacement rows for the faithfulness test
 N_RANDOM_PROBES = 8       # random features averaged in the faithfulness control
+N_HISTORY = 60            # trading days of price history drawn behind the forecast
 # Stock-days worth demonstrating. The first two are cases where the explainers line up; the
 # next two are cases where they name a different top feature, which happened on 11 of 28
 # randomly sampled stock-days. BAC also has LIME contradicting itself across its own re-runs.
@@ -61,6 +62,9 @@ def load():
     print(f"features: {len(test):,} explainable stock-days, {len(STATE['tickers'])} stocks "
           f"[{time.time() - t0:.0f}s]", flush=True)
 
+    STATE["hist"] = (pd.read_pickle(PANEL_FILE)
+                     .pivot(index="date", columns="ticker", values="close").sort_index())
+    print(f"price history: {STATE['hist'].shape[0]:,} days x {STATE['hist'].shape[1]} stocks", flush=True)
     load_live()
     STATE["models"], STATE["clf"], STATE["shap"], STATE["lime"], STATE["bg"] = {}, {}, {}, {}, {}
     for year in TEST_YEARS:
@@ -84,6 +88,8 @@ def load_live():
         return
     df = pd.read_pickle(RESULTS / "live_forecast.pkl")
     scored = pd.read_pickle(DATA / "live_features.pkl").dropna(subset=["target_ret"])
+    live_hist = (pd.read_pickle(DATA / "live_panel.pkl")
+                 .pivot(index="date", columns="ticker", values="close").sort_index())
     model = joblib.load(MODELS / "rf_reg_live.joblib")
     STATE["live"] = {
         "rows": df.set_index("ticker"),
@@ -92,9 +98,12 @@ def load_live():
         "shap": shap.TreeExplainer(model),
         "lime": scored[FEATURES].sample(N_LIME_TRAIN, random_state=SEED).values,
         "bg": scored[FEATURES].sample(N_BACKGROUND, random_state=SEED).values,
+        "hist": live_hist,
         "meta": json.loads((RESULTS / "live_meta.json").read_text()),
     }
     m = STATE["live"]["meta"]
+    # A forecast is only interesting before the session it predicts has traded.
+    m["days_old"] = int((pd.Timestamp.now().normalize() - pd.Timestamp(m["as_of_close"])).days)
     print(f"live forecast: {m['n_stocks']} stocks for the session after {m['as_of_close']}, "
           f"model retrained on {m['n_train_rows']:,} stock-days", flush=True)
 
@@ -121,6 +130,22 @@ def faithfulness(model, x, shap_row, background, rng):
             "n_random_probes": N_RANDOM_PROBES}
 
 
+def history(hist, ticker, upto, n=N_HISTORY):
+    """The last n closes up to and including `upto`, for the line behind the forecast."""
+    if ticker not in hist.columns:
+        return []
+    ser = hist[ticker].loc[:upto].dropna().tail(n)
+    return [{"date": str(d.date()), "close": float(v)} for d, v in ser.items()]
+
+
+def typical_move_bp(hist, ticker, upto, n=20):
+    """How much this stock usually moves in a day - the yardstick the forecast is read against."""
+    ser = hist[ticker].loc[:upto].dropna().tail(n + 1)
+    if len(ser) < 5:
+        return None
+    return float(1e4 * np.log(ser / ser.shift(1)).dropna().std())
+
+
 def top5(a):
     return set(np.argsort(-np.abs(a))[:5])
 
@@ -140,7 +165,7 @@ def explain(ticker, date, live=False):
                              f"(43 of the original 474 tickers no longer trade)."}
         row = L["rows"].loc[ticker]
         model, explainer, lime_ref, bg = L["model"], L["shap"], L["lime"], L["bg"]
-        as_of, year = L["meta"]["as_of_close"], None
+        as_of, year, hist = L["meta"]["as_of_close"], None, L["hist"]
     else:
         try:
             row = STATE["test"].loc[(ticker, pd.Timestamp(date))]
@@ -151,7 +176,7 @@ def explain(ticker, date, live=False):
         year = pd.Timestamp(date).year
         model, clf = STATE["models"][year], STATE["clf"][year]
         explainer, lime_ref, bg = STATE["shap"][year], STATE["lime"][year], STATE["bg"][year]
-        as_of = str(pd.Timestamp(date).date())
+        as_of, hist = str(pd.Timestamp(date).date()), STATE["hist"]
 
     x = row[FEATURES].values.astype(np.float64)
     rng = np.random.default_rng(SEED)
@@ -191,6 +216,8 @@ def explain(ticker, date, live=False):
         "prob_up": prob_up,
         "direction_correct": bool((pred_ret > 0) == (float(row["target_ret"]) > 0)) if known else None,
         "base_value_bp": 1e4 * base_value,
+        "history": history(hist, ticker, pd.Timestamp(as_of)),
+        "typical_move_bp": typical_move_bp(hist, ticker, pd.Timestamp(as_of)),
         "features": features,
         "agreement": {
             "spearman": float(stats.spearmanr(np.abs(shap_row), np.abs(lime_row))[0]),

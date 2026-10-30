@@ -61,6 +61,12 @@ Opens a local page where you pick one stock and one trading day. It then runs th
 for that stock-day and shows:
 
 * the forecast next-day return, the price it implies, and what actually happened;
+* **the forecast in context** — the last 60 closes, the forecast point, and a shaded band showing
+  one standard deviation of that stock's recent daily moves, which makes the central finding
+  visible: the forecast is roughly 20× smaller than a normal day's movement, so it sits almost on
+  top of the last close;
+* **a SHAP waterfall** — start at the average forecast, add each feature's contribution, arrive
+  exactly at this forecast, which is what "exact" means for TreeSHAP;
 * the TreeSHAP and LIME explanations of that same forecast, side by side on one scale;
 * whether the two explanations agree (rank correlation, shared top-5, same top feature,
   sign agreement);
@@ -86,7 +92,9 @@ to measure accuracy. `src/live.py` does the other half:
 
 It downloads the universe from Yahoo Finance, rebuilds the same 32 features, retrains with the
 same hyperparameters on everything up to the most recent close, and forecasts the next session.
-The demo page then offers it as a second mode, where "what happened" is honestly blank.
+The demo page then offers it as a second mode, where "what happened" is honestly blank. The page
+warns in red if the stored forecast is more than three days old, since by then the session it
+predicted has already traded — re-run `live.py` on the morning you present.
 
 Three things to state when showing it:
 
