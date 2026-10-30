@@ -22,3 +22,7 @@ papers/*.pdf
 data/live_panel.pkl
 data/live_features.pkl
 results/live_forecast.pkl
+
+# npm (pptxgenjs, for the slide builders)
+node_modules/
+package-lock.json

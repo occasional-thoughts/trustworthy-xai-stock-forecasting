@@ -281,14 +281,18 @@ def fig_local(xai):
 def fig_faithfulness(xai):
     f = xai["R1_faithfulness"]
     fig, ax = plt.subplots(figsize=(6.2, 3.3))
-    for key, color, label in (("top", SERIES[0], "Highest |SHAP| removed first"), ("random", SERIES[1], "Random order")):
+    # The two curves meet at k = 32 by construction - replacing every feature gives the same
+    # answer whichever order you do it in - so the labels go where the curves are furthest apart.
+    for key, color, label, at, off in (("top", SERIES[0], "Highest |SHAP| removed first", 4, (0, 11)),
+                                       ("random", SERIES[1], "Random order", 8, (0, -16))):
         ax.plot(f["k"], f["abs_change_bp"][key], color=color, linewidth=2, marker="o", markersize=5.5,
                 markeredgecolor=SURFACE, markeredgewidth=1.5)
-        ax.annotate(label, (f["k"][-1], f["abs_change_bp"][key][-1]), xytext=(6, 0), textcoords="offset points",
-                    va="center", color=INK2, fontsize=9)
+        i = f["k"].index(at)
+        ax.annotate(label, (f["k"][i], f["abs_change_bp"][key][i]), xytext=off, textcoords="offset points",
+                    ha="center", color=color, fontsize=9, fontweight="bold")
     ax.set_xscale("symlog", linthresh=1)
     ax.set_xticks(f["k"], [str(k) for k in f["k"]])
-    ax.set_xlim(0, 110)
+    ax.set_xlim(0, 45)
     ax.set_xlabel("features replaced by background values")
     ax.set_ylabel("mean |Δ forecast| (bp)")
     ax.set_ylim(0, None)

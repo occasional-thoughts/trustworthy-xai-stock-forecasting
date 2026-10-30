@@ -13,10 +13,11 @@
 5. Data
 6. Methodology
 7. Results
-8. Discussion
-9. Limitations
-10. Conclusion
-11. References
+8. Demonstration and live forecasting
+9. Discussion
+10. Limitations
+11. Conclusion
+12. References
 
 ---
 
@@ -148,6 +149,13 @@ misplaced trust.
    stability, local fidelity and faithfulness.
 4. **Statistical tests** of explanation drift across four market regimes and 11 sectors,
    on a 474-stock universe.
+5. **A reproducibility defect in the common LIME usage pattern**, found, measured and fixed
+   (§6.4). Before the fix the global SHAP–LIME agreement read τ 0.73; after it, τ 0.58. The
+   higher figure was an artefact of LIME not being reproducible across repeats that were
+   intended to be identical.
+6. **A working forecast-and-audit system** (§8): next-session forecasts for 431 currently
+   traded stocks, each explained by TreeSHAP and five LIME runs and audited live, served by
+   code that imports the study's own explanation functions rather than reimplementing them.
 
 ---
 
@@ -155,15 +163,17 @@ misplaced trust.
 
 | Layer | Tool (version) | Used for |
 |---|---|---|
-| Language | Python 3.11.13 | All code (8 scripts in `src/`) |
+| Language | Python 3.11.13 | All code (11 Python modules in `src/`) |
 | Environment | `venv` | Isolated, reproducible dependencies |
 | Data handling | pandas 3.0.5, NumPy 2.1.3 | Cleaning the panel, feature engineering (wide date × ticker tables), results |
 | Machine learning | scikit-learn 1.9.1 | `RandomForestRegressor` (main model), `RandomForestClassifier` (direction), `RidgeCV` (baseline), `permutation_importance` |
 | XAI: SHAP | shap 0.51.0 | `TreeExplainer`: exact TreeSHAP values, local and global explanations |
 | XAI: LIME | lime 0.2.0.1 | `LimeTabularExplainer`: local surrogate explanations |
 | Statistics | SciPy 1.17.1 | Kendall τ, Spearman ρ, binomial test, normal distribution for the Diebold–Mariano test |
-| Visualisation | Matplotlib 3.11.2 | All 12 figures |
+| Visualisation | Matplotlib 3.11.2 | All 15 figures |
 | Model storage | joblib 1.6.0 | Saved yearly Random Forest models |
+| Live prices | yfinance 0.2.x | Downloading current prices for the next-session forecast (§8.2) |
+| Demonstration | Python standard library (`http.server`), inline SVG | The interactive page (§8.3); no web framework |
 | Supporting | numba 0.67.0 | Required by shap |
 | Result formats | JSON, CSV, pickle, PNG | Metrics, importances, explanation samples, figures |
 | Hardware | Apple M3 Pro (12 cores), 18 GB RAM, macOS 14.4 | Full pipeline runs in about 30 minutes |
@@ -182,6 +192,12 @@ misplaced trust.
 | 6 | `explain.py` | SHAP explanations and reliability audit | `results/xai.json` |
 | 7 | `lime_explain.py` | LIME explanations and SHAP-vs-LIME audit | `results/lime.json` |
 | 8 | `plots.py` | All figures | `results/figures/` |
+| 9 | `live.py` | Retrain to the latest close, forecast the next session | `results/live_forecast.pkl`, `live_meta.json` |
+| 10 | `app.py` | Serve the interactive forecast-and-audit page | `http://127.0.0.1:8000` |
+
+`config.py` (paths, periods, regimes, seed) and `features.py` are imported rather than run
+on their own; `features.build()` is called by both `features.py` and `live.py`, so the live
+forecast is constructed from exactly the same 32 features as the study.
 
 ---
 
@@ -650,7 +666,147 @@ Figures: `lime_vs_shap_local.png`, `lime_reliability.png`, `explainer_agreement.
 
 ---
 
-## 8. Discussion
+## 8. Demonstration and live forecasting
+
+### 8.1 Why forecasting the past is necessary, and why it is not sufficient
+
+Every number in §7 comes from forecasting days whose outcome is already known. That is not
+a weakness of the design; it is the only way a forecast can be scored. A model cannot be
+shown to have an out-of-sample R² of +0.00013 unless 405,545 of its forecasts have been
+compared against what actually happened.
+
+It does, however, leave an obvious question unanswered: does the pipeline work on a day that
+has not happened? A backtest can be made to look good by construction — by a feature that
+leaks, by a universe chosen after the fact, by hyperparameters tuned on the test period.
+Running the identical code forward, on data that did not exist when the code was written,
+removes all three possibilities at once. §8.2 does that, and §8.3 exposes both halves
+through one interface so that the live forecast and the graded backtest can be inspected
+side by side.
+
+### 8.2 Live forecasting: `live.py`
+
+`live.py` downloads current prices for the study's 474 tickers from Yahoo Finance, rebuilds
+the 32 features by calling `features.build()`, retrains a Random Forest with the
+hyperparameters already selected in §6.1, and forecasts the next trading session.
+
+The only substantive difference from `features.py` is one line. The study drops every row
+with a missing `target_ret`, which necessarily discards the most recent day. The live path
+keeps it:
+
+```python
+df = df.dropna(subset=FEATURES + ["close"])   # NOT on the target: the last day has none
+train = df.dropna(subset=["target_ret"])      # train on every day with a known outcome
+live  = df[df.date == last_day].copy()        # forecast the one day with no outcome
+assert live.target_ret.isna().all(), "the last day already has a known outcome - rerun after the close"
+```
+
+The assertion is a guard against the most tempting error in this kind of demonstration. If
+the script is run while a session is still in progress, the last available day already has
+an outcome, and the script stops rather than presenting a hindsight value as a forecast.
+
+A representative run, as of the close of 29 October 2026:
+
+| Quantity | Value |
+|---|---|
+| Stocks forecast | 431 |
+| Training rows | 1,473,486 stock-days, through 28 October 2026 |
+| Hyperparameters | unchanged from §6.1 (300 trees, leaf 5,000, max_features 0.3) |
+| Price source | Yahoo Finance via `yfinance`, split- and dividend-adjusted |
+| Tickers no longer trading | 43 of the original 474 |
+
+Three caveats are reported by the system itself rather than left to the reader. First, 43 of
+the original tickers have been acquired, merged or delisted, so the live universe is smaller
+than the study universe and the market-context features are computed over the survivors —
+the survivorship bias discussed in §10 made visible rather than hidden. Second, the prices
+come from a different vendor than the study panel; both are adjusted, but they are not the
+same series. Third, nothing in the live output is scored, because the outcome does not
+exist yet; the live mode demonstrates that the mechanism runs forward, not that it is
+accurate.
+
+### 8.3 The interactive demonstration: `app.py`
+
+`app.py` serves a single page from the Python standard library's `ThreadingHTTPServer`. It
+loads the four walk-forward models from §6.1, a TreeSHAP explainer for each, the LIME
+reference samples, the cleaned price history (2,526 days × 474 stocks) and, when present,
+the live forecast and its retrained model.
+
+Three endpoints:
+
+| Endpoint | Returns |
+|---|---|
+| `GET /api/meta` | ticker list, date range, suggested cases, live metadata |
+| `GET /api/dates?ticker=…` | the dates that stock can be explained on |
+| `GET /api/explain?ticker=…&date=…` | forecast, SHAP, five LIME runs, agreement, faithfulness |
+
+Two design decisions matter for the credibility of the demonstration.
+
+Nothing is served from a cached result file. Each `/api/explain` request runs TreeSHAP once
+and LIME five times, on the saved model, at request time. The page therefore shows what the
+pipeline produces, not a transcription of §7.
+
+The live and historical paths share one function. `explain(ticker, date, live=False)`
+differs between the two modes only in which model and which feature row it selects; the
+TreeSHAP call, the five LIME runs, the agreement statistics and the faithfulness probe are
+the same lines of code. `app.py` imports `lime_weights` from `lime_explain.py` and
+`FEATURES` and `FAMILY_OF` from `features.py`, so the demonstration cannot drift into being
+a more flattering version of the study.
+
+The faithfulness panel is the §6.5 R1 test reduced to a single forecast: SHAP's top feature
+is replaced with each of 32 background rows and the mean absolute change in the forecast is
+recorded, then the same is done for eight randomly chosen features, and the ratio is
+reported. For a forecast whose explanation is faithful the ratio is well above one.
+
+### 8.4 Input and output
+
+The user supplies two values: a stock (474 in historical mode, 431 in live mode) and either
+a trading day between 2 January 2019 and 24 May 2022 or the next session.
+
+The page returns seven things.
+
+1. **The forecast.** Predicted next-day return in basis points, the implied close in
+   dollars, and the Random Forest classifier's probability that the day is up. In historical
+   mode the realised return and close are shown beside it, with the direction marked correct
+   or incorrect.
+2. **The forecast in context.** The last 60 closes, a dashed segment to the forecast, and a
+   shaded band of one standard deviation of that stock's recent daily moves. The band is the
+   point of the chart: for AAPL on 29 October 2026 the forecast is −4.05 bp against a ±87 bp
+   band, so the model is predicting a move roughly 22 times smaller than a normal day. The
+   near-zero dispersion reported in §7.1.1 is a summary statistic; this is the same fact
+   made visible on one stock.
+3. **A SHAP waterfall.** The base value (the model's mean forecast), then each of the top
+   eight contributions in turn, then the remaining 24 features as one bar, ending exactly on
+   the forecast. The exactness is the demonstration of TreeSHAP's additivity: the bars are
+   not an illustration of the forecast, they sum to it.
+4. **Both explanations.** SHAP and LIME bar charts of the same forecast side by side, plus a
+   table of all 32 features with both attributions in basis points and the feature's value.
+5. **Agreement.** Spearman ρ between the two attribution vectors, top-5 overlap, whether
+   they name the same top feature, and sign agreement on SHAP's top five.
+6. **Stability.** The top feature from each of five LIME runs with different seeds, the mean
+   Spearman between runs, and the median surrogate R². TreeSHAP is labelled deterministic,
+   because re-running it on the same model returns identical values.
+7. **Faithfulness.** The change in the forecast when SHAP's top feature is deleted, the mean
+   change for eight random features, and the ratio.
+
+The five preset cases are chosen to show both outcomes of the §7.6 comparison: two stock-days
+where the explainers agree, and two where they name a different top feature — which happened
+on 41% of the sampled stock-days — including one where LIME contradicts its own re-runs.
+
+### 8.5 Guards against overclaiming
+
+The demonstration is the part of this project most likely to be mistaken for a trading
+system, so three guards are built into it.
+
+* The live forecast carries its age. `app.py` computes how many days have passed since the
+  close the forecast was made from, and the page displays a warning when that exceeds three
+  days, because a forecast for a session that has already traded is no longer a forecast.
+* The 43 delisted tickers are listed on the page rather than silently dropped.
+* The page states that the forecast has an out-of-sample R² of +0.00013 across 405,545
+  scored forecasts. The live mode demonstrates that the mechanism works; §7.1 remains the
+  statement of how well it works.
+
+---
+
+## 9. Discussion
 
 1. **Score the change, not the level.**
    * One set of forecasts scores R² 0.9994 on the price and +0.00013 on the return. The first
@@ -691,7 +847,7 @@ Figures: `lime_vs_shap_local.png`, `lime_reliability.png`, `explainer_agreement.
 
 ---
 
-## 9. Limitations
+## 10. Limitations
 
 * **Data:**
   * price and volume only (no news, fundamentals or macroeconomic data);
@@ -708,12 +864,16 @@ Figures: `lime_vs_shap_local.png`, `lime_reliability.png`, `explainer_agreement.
   days. The decile portfolio charges one flat 10 bp round-trip cost and ignores slippage,
   market impact, shorting costs and capacity, so the net −1.8 bp/day figure is an optimistic
   bound rather than a backtest.
+* **Live demonstration (§8):** its prices come from Yahoo Finance rather than the study
+  panel, its universe is the 431 survivors of the original 474, and none of its forecasts
+  are scored, because their outcomes do not exist yet. It evidences that the pipeline runs
+  forward; it is not additional evidence of accuracy.
 * **Literature gaps:** stated from abstracts and public details; verify against full
   texts before submission.
 
 ---
 
-## 10. Conclusion
+## 11. Conclusion
 
 * **Accuracy.** A walk-forward Random Forest predicts the next-day **return** for 474 S&P
   500 stocks with an out-of-sample R² of **+0.00013** — statistically indistinguishable from
@@ -730,6 +890,16 @@ Figures: `lime_vs_shap_local.png`, `lime_reliability.png`, `explainer_agreement.
   between runs (ρ 0.45), fit the model poorly (median R² 0.17), and name a different top
   feature on 41% of forecasts.
 * **Neither** SHAP nor LIME identifies the features that actually improve accuracy.
+* **The audit found a defect in the audit tool.** `LimeTabularExplainer` binds its random
+  state at construction, so the natural usage pattern — reassigning `.random_state` between
+  runs — leaves repeats non-identical (measured ρ 0.46–0.53 where it should be 1.000).
+  Correcting it moved the headline SHAP–LIME agreement from τ 0.73 to τ 0.58. A reliability
+  study that does not check its own tooling can report the inflated figure without ever
+  seeing it.
+* **The pipeline runs forward.** The same features, hyperparameters and explanation code
+  produce next-session forecasts for 431 currently traded stocks, explained and audited at
+  request time (§8). This demonstrates that no step depends on knowing the outcome; it does
+  not improve the accuracy reported above, and the system says so on the page.
 * **Recommendations for stock-forecasting studies:**
   1. benchmark accuracy against persistence;
   2. prefer TreeSHAP to single LIME runs for tree models;
@@ -740,7 +910,7 @@ Figures: `lime_vs_shap_local.png`, `lime_reliability.png`, `explainer_agreement.
 
 ---
 
-## 11. References
+## 12. References
 
 **Literature review**
 
