@@ -2,7 +2,7 @@
 
 Issues found in the raw file (see README, "Data cleaning"):
   1. adjclose is NaN before a stock was listed           -> those rows are dropped
-  2. 15 tickers store open/high/low already dividend-adjusted but close unadjusted, so
+  2. 12 tickers store open/high/low already dividend-adjusted but close unadjusted, so
      high/low do not bracket close                        -> put OHLC on one adjusted basis
   3. GOOG before 2014-03-27 is a different, unadjusted share-class series (a -300% jump)
                                                            -> dropped
